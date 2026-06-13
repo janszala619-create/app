@@ -1,0 +1,64 @@
+name: Build unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+
+env:
+  XCODE_CONTAINER: "Erinnerungen app ios/MemoPing.xcodeproj"
+  SCHEME: "MemoPing"
+  CONFIGURATION: Release
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Show available schemes
+        run: |
+          xcodebuild -list -project "$XCODE_CONTAINER"
+
+      - name: Build app without signing
+        run: |
+          xcodebuild \
+            -project "$XCODE_CONTAINER" \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            clean build
+
+      - name: Create unsigned IPA
+        run: |
+          PRODUCTS="$RUNNER_TEMP/DerivedData/Build/Products/${CONFIGURATION}-iphoneos"
+          APP_PATH=$(find "$PRODUCTS" -maxdepth 1 -type d -name "*.app" | head -n 1)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "Keine .app-Datei gefunden."
+            find "$RUNNER_TEMP/DerivedData/Build/Products" -maxdepth 4 -print
+            exit 1
+          fi
+
+          echo "Gefundene App: $APP_PATH"
+
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+
+          zip -r MemoPing-unsigned.ipa Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MemoPing-unsigned-ipa
+          path: MemoPing-unsigned.ipa
