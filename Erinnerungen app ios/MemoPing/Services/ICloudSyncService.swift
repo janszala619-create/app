@@ -1,4 +1,3 @@
-import CloudKit
 import Foundation
 
 enum ICloudAccountState: Equatable {
@@ -50,31 +49,6 @@ final class ICloudSyncService {
     private init() {}
 
     func accountState() async -> ICloudAccountState {
-        await withCheckedContinuation { continuation in
-            CKContainer(identifier: Self.cloudKitContainerIdentifier).accountStatus { status, error in
-                if let error {
-                    #if DEBUG
-                    print("MemoPing: iCloud Account Status Fehler: \(error)")
-                    #endif
-                    continuation.resume(returning: .temporarilyUnavailable(error.localizedDescription))
-                    return
-                }
-
-                switch status {
-                case .available:
-                    continuation.resume(returning: .available)
-                case .noAccount:
-                    continuation.resume(returning: .noAccount)
-                case .restricted:
-                    continuation.resume(returning: .restricted)
-                case .couldNotDetermine:
-                    continuation.resume(returning: .couldNotDetermine)
-                case .temporarilyUnavailable:
-                    continuation.resume(returning: .temporarilyUnavailable("iCloud ist gerade nicht erreichbar. Die Synchronisation wird von iOS später erneut versucht."))
-                @unknown default:
-                    continuation.resume(returning: .couldNotDetermine)
-                }
-            }
-        }
+        .temporarilyUnavailable("Die unsigned IPA läuft stabil mit lokalem Speicher. iCloud-Sync wird erst in einem signierten Xcode-Build mit aktivierten CloudKit-Entitlements geprüft.")
     }
 }
