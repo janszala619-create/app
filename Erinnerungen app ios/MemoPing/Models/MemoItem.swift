@@ -47,24 +47,24 @@ enum MemoReminderRepeatRule: String, CaseIterable, Codable, Identifiable {
 
 @Model
 final class MemoItem {
-    var id: UUID = UUID()
-    var title: String = ""
-    var bodyText: String = ""
-    var recognizedText: String = ""
-    var createdAt: Date = Date()
-    var updatedAt: Date = Date()
+    @Attribute(.unique) var id: UUID
+    var title: String
+    var bodyText: String
+    var recognizedText: String
+    var createdAt: Date
+    var updatedAt: Date
     var reminderDate: Date?
-    var hasReminder: Bool = false
-    var reminderRepeatRawValue: String? = MemoReminderRepeatRule.none.rawValue
-    var isCompleted: Bool = false
-    var priorityRawValue: String = MemoPriority.normal.rawValue
+    var hasReminder: Bool
+    var reminderRepeatRawValue: String?
+    var isCompleted: Bool
+    var priorityRawValue: String
     var categoryRawValue: String?
-    var sourceTypeRawValue: String = MemoSourceType.text.rawValue
-    var imageFileNames: [String] = []
-    var detectedPhoneNumbers: [String] = []
-    var detectedURLs: [String] = []
-    var detectedAddresses: [String] = []
-    var detectedDateStrings: [String] = []
+    var sourceTypeRawValue: String
+    var imageFileNames: [String]
+    var detectedPhoneNumbers: [String]
+    var detectedURLs: [String]
+    var detectedAddresses: [String]
+    var detectedDateStrings: [String]
 
     init(
         id: UUID = UUID(),
