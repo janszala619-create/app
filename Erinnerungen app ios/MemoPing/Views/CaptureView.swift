@@ -27,7 +27,7 @@ struct CaptureView: View {
                     captureContent
                 }
             }
-            .navigationTitle(previewViewModel == nil ? "Erfassen" : "Vorschau")
+            .navigationTitle(previewViewModel == nil ? "Erfassen" : "Neue Erinnerung")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -45,6 +45,7 @@ struct CaptureView: View {
                 }
             }
         }
+        .preferredColorScheme(.dark)
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase != .active {
                 viewModel.stopRecording()
@@ -75,7 +76,7 @@ struct CaptureView: View {
                     TextEditor(text: $viewModel.inputText)
                         .frame(minHeight: 150)
                         .padding(10)
-                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                         .overlay {
                             if viewModel.inputText.isEmpty {
                                 Text("Notiz oder Erinnerung eingeben")
@@ -156,7 +157,16 @@ struct CaptureView: View {
             }
             .padding()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(red: 0.03, green: 0.03, blue: 0.06),
+                    Color(red: 0.06, green: 0.04, blue: 0.10)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
         .onChange(of: viewModel.inputText) { _, _ in
             viewModel.textDidChange()
         }

@@ -24,6 +24,7 @@ struct AppRootView: View {
                 captureRequestCenter.isCapturePresented = false
             }
         }
+        .preferredColorScheme(.dark)
     }
 }
 

@@ -4,61 +4,65 @@ struct MemoCardView: View {
     let item: MemoItem
     var category: MemoCategoryItem? = nil
     var onToggleCompleted: (() -> Void)?
+    var onDelete: (() -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: item.isCompleted ? "checkmark.circle.fill" : iconName)
-                    .foregroundStyle(item.isCompleted ? .green : item.priority.tint)
-                    .font(.title3.weight(.semibold))
-                    .frame(width: 28, height: 28)
-                    .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                Button {
+                    onToggleCompleted?()
+                } label: {
+                    Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 30, weight: .semibold))
+                        .foregroundStyle(item.isCompleted ? Color.green : cardTint)
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(.borderless)
+                .disabled(onToggleCompleted == nil)
+                .accessibilityLabel(item.isCompleted ? "Als offen markieren" : "Als erledigt markieren")
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.title)
-                        .font(.headline)
-                        .foregroundStyle(item.isCompleted ? .secondary : .primary)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(item.isCompleted ? .secondary : .white)
                         .strikethrough(item.isCompleted)
                         .lineLimit(2)
 
                     Text(item.previewText)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(.body)
+                        .foregroundStyle(.white.opacity(0.62))
                         .lineLimit(3)
                 }
 
                 Spacer(minLength: 8)
 
-                HStack(spacing: 10) {
-                    if !item.imageFileNames.isEmpty {
-                        Image(systemName: "photo")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel("Enthält Bild")
+                if let onDelete {
+                    Button(role: .destructive) {
+                        onDelete()
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(Color(red: 1.0, green: 0.28, blue: 0.42))
+                            .frame(width: 34, height: 34)
                     }
-
-                    if let onToggleCompleted {
-                        Button {
-                            onToggleCompleted()
-                        } label: {
-                            Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(item.isCompleted ? .green : .secondary)
-                                .frame(width: 32, height: 32)
-                        }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel(item.isCompleted ? "Als offen markieren" : "Als erledigt markieren")
-                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Memo löschen")
                 }
             }
 
             metadataRow
         }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(18)
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.05))
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(cardTint.opacity(0.35), lineWidth: 1)
+        }
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(cardTint)
+                .frame(width: 5)
+                .padding(.vertical, 18)
         }
         .opacity(item.isCompleted ? 0.72 : 1)
         .contentShape(Rectangle())
@@ -73,6 +77,34 @@ struct MemoCardView: View {
             return "photo.circle"
         }
         return "note.text"
+    }
+
+    private var cardTint: Color {
+        if let category {
+            return category.tint
+        }
+
+        if item.priority != .normal {
+            return item.priority.tint
+        }
+
+        if item.hasReminder {
+            return Color(red: 0.52, green: 0.30, blue: 1.0)
+        }
+
+        return Color(red: 1.0, green: 0.25, blue: 0.56)
+    }
+
+    private var cardBackground: LinearGradient {
+        LinearGradient(
+            colors: [
+                cardTint.opacity(0.22),
+                Color(red: 0.10, green: 0.07, blue: 0.16).opacity(0.96),
+                Color(red: 0.06, green: 0.05, blue: 0.09).opacity(0.98)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
     private var metadataRow: some View {
@@ -128,9 +160,9 @@ struct MemoCardView: View {
     private func iconBadge(_ systemImage: String, label: String) -> some View {
         Image(systemName: systemImage)
             .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Color.white.opacity(0.7))
             .frame(width: 26, height: 26)
-            .background(Color(.tertiarySystemGroupedBackground), in: Circle())
+            .background(Color.white.opacity(0.10), in: Circle())
             .accessibilityLabel(label)
     }
 }

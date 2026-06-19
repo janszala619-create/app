@@ -32,6 +32,20 @@ struct PreviewView: View {
             organizationSection
             saveSection
         }
+        .scrollContentBackground(.hidden)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(red: 0.03, green: 0.03, blue: 0.06),
+                    Color(red: 0.06, green: 0.04, blue: 0.10),
+                    Color(red: 0.02, green: 0.02, blue: 0.04)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .tint(Color(red: 0.56, green: 0.34, blue: 1.0))
+        .preferredColorScheme(.dark)
         .scrollDismissesKeyboard(.interactively)
         .onChange(of: selectedPhotoItems) { _, newItems in
             Task {
@@ -74,6 +88,7 @@ struct PreviewView: View {
     private var contentSection: some View {
         Section("Inhalt") {
             TextField("Titel", text: $viewModel.title)
+                .font(.title.weight(.bold))
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Notiztext")
@@ -95,6 +110,7 @@ struct PreviewView: View {
                 }
             }
         }
+        .listRowBackground(formRowBackground)
     }
 
     private var photoQuestionSection: some View {
@@ -168,6 +184,7 @@ struct PreviewView: View {
             }
             .padding(.vertical, 4)
         }
+        .listRowBackground(formRowBackground)
     }
 
     private var reminderSection: some View {
@@ -254,6 +271,7 @@ struct PreviewView: View {
                 .padding(.vertical, 4)
             }
         }
+        .listRowBackground(formRowBackground)
     }
 
     private var organizationSection: some View {
@@ -261,6 +279,7 @@ struct PreviewView: View {
             CategoryPickerView(selectionRawValue: $viewModel.categoryRawValue, categories: categories)
             PriorityPickerView(selection: $viewModel.priority)
         }
+        .listRowBackground(formRowBackground)
     }
 
     @ViewBuilder
@@ -288,6 +307,7 @@ struct PreviewView: View {
                 }
             }
         }
+        .listRowBackground(formRowBackground)
     }
 
     @ViewBuilder
@@ -321,6 +341,7 @@ struct PreviewView: View {
                     .padding(.vertical, 4)
                 }
             }
+            .listRowBackground(formRowBackground)
         }
     }
 
@@ -353,6 +374,11 @@ struct PreviewView: View {
                     .frame(maxWidth: .infinity)
             }
         }
+        .listRowBackground(Color.clear)
+    }
+
+    private var formRowBackground: Color {
+        Color.white.opacity(0.07)
     }
 
     private var reminderDateBinding: Binding<Date> {
