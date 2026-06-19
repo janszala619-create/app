@@ -190,20 +190,35 @@ struct HomeView: View {
 
     private func toggleCompleted(_ item: MemoItem) {
         let previousCompletionState = item.isCompleted
+        let previousCalendarSyncState = item.syncsToCalendar
+        let previousCalendarEventIdentifier = item.calendarEventIdentifier
         item.isCompleted.toggle()
+
+        if item.isCompleted {
+            item.syncsToCalendar = false
+            item.calendarEventIdentifier = nil
+        }
+
         item.updatedAt = Date()
 
         Task { @MainActor in
             do {
                 if item.isCompleted {
                     NotificationService.shared.cancelReminder(for: item)
+                    try? await CalendarSyncService.shared.deleteEvent(with: previousCalendarEventIdentifier)
                 } else if item.hasReminder {
                     try await NotificationService.shared.scheduleReminder(for: item)
+
+                    if item.syncsToCalendar {
+                        item.calendarEventIdentifier = try await CalendarSyncService.shared.saveEvent(for: item)
+                    }
                 }
                 try modelContext.save()
                 MemoWidgetSnapshotUpdater.update(from: items)
             } catch {
                 item.isCompleted = previousCompletionState
+                item.syncsToCalendar = previousCalendarSyncState
+                item.calendarEventIdentifier = previousCalendarEventIdentifier
                 item.updatedAt = Date()
                 errorMessage = error.localizedDescription
             }
@@ -213,6 +228,7 @@ struct HomeView: View {
     private func delete(_ item: MemoItem) {
         Task { @MainActor in
             NotificationService.shared.cancelReminder(for: item)
+            try? await CalendarSyncService.shared.deleteEvent(with: item.calendarEventIdentifier)
             imageStorage.deleteImages(fileNames: item.imageFileNames)
             modelContext.delete(item)
 

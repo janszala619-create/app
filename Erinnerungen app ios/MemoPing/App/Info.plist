@@ -20,6 +20,10 @@
 	<string>1</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>MemoPing benötigt Kalenderzugriff, um deine Erinnerungen als Termine im iOS-Kalender zu erstellen, zu aktualisieren und zu entfernen.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>MemoPing benötigt Kalenderzugriff, um deine Erinnerungen als Termine im iOS-Kalender zu synchronisieren.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>MemoPing benötigt Zugriff auf die Kamera, damit du Fotos zu deinen Notizen und Erinnerungen hinzufügen kannst.</string>
 	<key>NSMicrophoneUsageDescription</key>

@@ -143,6 +143,8 @@ final class MemoItem {
     var hasReminder: Bool = false
     var reminderRepeatRawValue: String? = MemoReminderRepeatRule.none.rawValue
     var reminderLeadTimeRawValue: String? = MemoReminderLeadTime.none.rawValue
+    var syncsToCalendar: Bool = false
+    var calendarEventIdentifier: String?
     var isCompleted: Bool = false
     var priorityRawValue: String = MemoPriority.normal.rawValue
     var categoryRawValue: String?
@@ -164,6 +166,8 @@ final class MemoItem {
         hasReminder: Bool = false,
         reminderRepeatRule: MemoReminderRepeatRule = .none,
         reminderLeadTime: MemoReminderLeadTime = .none,
+        syncsToCalendar: Bool = false,
+        calendarEventIdentifier: String? = nil,
         isCompleted: Bool = false,
         priority: MemoPriority = .normal,
         category: MemoCategory? = nil,
@@ -185,6 +189,8 @@ final class MemoItem {
         self.hasReminder = hasReminder
         self.reminderRepeatRawValue = reminderRepeatRule.rawValue
         self.reminderLeadTimeRawValue = reminderLeadTime.rawValue
+        self.syncsToCalendar = syncsToCalendar
+        self.calendarEventIdentifier = calendarEventIdentifier
         self.isCompleted = isCompleted
         self.priorityRawValue = priority.rawValue
         self.categoryRawValue = categoryRawValue ?? category?.rawValue

@@ -81,6 +81,7 @@ final class PreviewViewModel: ObservableObject {
     @Published var hasReminder = false
     @Published var reminderRepeatRule: MemoReminderRepeatRule = .none
     @Published var reminderLeadTime: MemoReminderLeadTime = .none
+    @Published var syncsToCalendar = false
     @Published var categoryRawValue: String?
     @Published var priority: MemoPriority = .normal
     @Published private(set) var imageAttachments: [PreviewImageAttachment] = []
@@ -104,6 +105,7 @@ final class PreviewViewModel: ObservableObject {
     private let dataDetectionService = DataDetectionService.shared
     private let imageStorage = ImageStorageService.shared
     private let notificationService = NotificationService.shared
+    private let calendarSyncService = CalendarSyncService.shared
 
     init(draft: MemoDraft) {
         title = draft.title
@@ -313,6 +315,7 @@ final class PreviewViewModel: ObservableObject {
         let storedImageNames = imageAttachments.map(\.fileName)
         let finalTitle = generatedTitle()
         let infoToStore = detectedInfo.sanitized()
+        var createdCalendarEventIdentifier: String?
 
         let memo = MemoItem(
             title: finalTitle,
@@ -322,6 +325,7 @@ final class PreviewViewModel: ObservableObject {
             hasReminder: shouldScheduleReminder,
             reminderRepeatRule: shouldScheduleReminder ? reminderRepeatRule : .none,
             reminderLeadTime: shouldScheduleReminder ? reminderLeadTime : .none,
+            syncsToCalendar: shouldScheduleReminder && syncsToCalendar,
             priority: priority,
             categoryRawValue: categoryRawValue,
             sourceType: sourceType,
@@ -340,8 +344,18 @@ final class PreviewViewModel: ObservableObject {
                 try await notificationService.scheduleReminder(for: memo)
             }
 
+            if shouldScheduleReminder && syncsToCalendar {
+                createdCalendarEventIdentifier = try await calendarSyncService.saveEvent(for: memo)
+                memo.calendarEventIdentifier = createdCalendarEventIdentifier
+                try modelContext.save()
+            }
+
             didPersistImages = true
         } catch {
+            if let createdCalendarEventIdentifier {
+                try? await calendarSyncService.deleteEvent(with: createdCalendarEventIdentifier)
+            }
+
             if shouldScheduleReminder {
                 notificationService.cancelReminder(for: memo)
             }

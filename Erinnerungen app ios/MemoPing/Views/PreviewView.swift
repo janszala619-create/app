@@ -213,6 +213,14 @@ struct PreviewView: View {
                     }
                 }
 
+                Toggle("Mit iOS-Kalender synchronisieren", isOn: $viewModel.syncsToCalendar)
+
+                if viewModel.syncsToCalendar {
+                    Label("MemoPing erstellt dafür einen Termin im iOS-Kalender und aktualisiert ihn bei Änderungen.", systemImage: "calendar.badge.plus")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 if let reminderValidationMessage = viewModel.reminderValidationMessage {
                     Label(reminderValidationMessage, systemImage: "exclamationmark.triangle")
                         .font(.caption)

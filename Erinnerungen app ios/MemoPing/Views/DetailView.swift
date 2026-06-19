@@ -150,6 +150,8 @@ struct DetailView: View {
                                     .tag(leadTime)
                             }
                         }
+
+                        Toggle("Mit iOS-Kalender synchronisieren", isOn: calendarSyncBinding)
                     }
                 } else if item.hasReminder, let reminderDate = item.reminderDate {
                     Label("Erinnerung aktiv", systemImage: "bell.fill")
@@ -164,6 +166,12 @@ struct DetailView: View {
 
                     if item.reminderLeadTime.hasLeadNotification {
                         Label(item.reminderLeadTime.shortDisplayName, systemImage: item.reminderLeadTime.systemImage)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if item.syncsToCalendar {
+                        Label("Mit iOS-Kalender synchronisiert", systemImage: "calendar.badge.checkmark")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -340,6 +348,7 @@ struct DetailView: View {
                 if !isEnabled {
                     item.reminderRepeatRule = .none
                     item.reminderLeadTime = .none
+                    item.syncsToCalendar = false
                 }
             }
         )
@@ -371,6 +380,16 @@ struct DetailView: View {
             get: { item.reminderLeadTime },
             set: {
                 item.reminderLeadTime = $0
+                item.updatedAt = Date()
+            }
+        )
+    }
+
+    private var calendarSyncBinding: Binding<Bool> {
+        Binding(
+            get: { item.syncsToCalendar },
+            set: {
+                item.syncsToCalendar = $0
                 item.updatedAt = Date()
             }
         )
@@ -468,8 +487,10 @@ struct DetailView: View {
             do {
                 if item.isCompleted || !item.hasReminder {
                     NotificationService.shared.cancelReminder(for: item)
+                    await removeCalendarEventIfNeeded()
                 } else {
                     try await NotificationService.shared.scheduleReminder(for: item)
+                    try await syncCalendarEventIfNeeded()
                 }
 
                 try modelContext.save()
@@ -486,27 +507,39 @@ struct DetailView: View {
         item.reminderDate = nil
         item.reminderRepeatRule = .none
         item.reminderLeadTime = .none
+        item.syncsToCalendar = false
+        let calendarEventIdentifier = item.calendarEventIdentifier
+        item.calendarEventIdentifier = nil
         item.updatedAt = Date()
         NotificationService.shared.cancelReminder(for: item)
 
-        do {
-            try modelContext.save()
-            refreshWidgetSnapshot()
-        } catch {
-            errorMessage = error.localizedDescription
+        Task { @MainActor in
+            do {
+                try? await CalendarSyncService.shared.deleteEvent(with: calendarEventIdentifier)
+                try modelContext.save()
+                refreshWidgetSnapshot()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
     private func markCompleted() {
         item.isCompleted = true
+        item.syncsToCalendar = false
+        let calendarEventIdentifier = item.calendarEventIdentifier
+        item.calendarEventIdentifier = nil
         item.updatedAt = Date()
         NotificationService.shared.cancelReminder(for: item)
 
-        do {
-            try modelContext.save()
-            refreshWidgetSnapshot()
-        } catch {
-            errorMessage = error.localizedDescription
+        Task { @MainActor in
+            do {
+                try? await CalendarSyncService.shared.deleteEvent(with: calendarEventIdentifier)
+                try modelContext.save()
+                refreshWidgetSnapshot()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -541,6 +574,7 @@ struct DetailView: View {
         Task { @MainActor in
             do {
                 try await NotificationService.shared.scheduleReminder(for: item)
+                try await syncCalendarEventIfNeeded()
                 try modelContext.save()
                 refreshWidgetSnapshot()
 
@@ -561,19 +595,25 @@ struct DetailView: View {
         Task { @MainActor in
             if item.isCompleted {
                 NotificationService.shared.cancelReminder(for: item)
+                await removeCalendarEventIfNeeded()
             } else if item.hasReminder {
                 do {
                     try await NotificationService.shared.scheduleReminder(for: item)
+                    try await syncCalendarEventIfNeeded()
                 } catch {
                     errorMessage = error.localizedDescription
                 }
             }
+
+            try? modelContext.save()
+            refreshWidgetSnapshot()
         }
     }
 
     private func deleteMemo() {
         Task { @MainActor in
             NotificationService.shared.cancelReminder(for: item)
+            try? await CalendarSyncService.shared.deleteEvent(with: item.calendarEventIdentifier)
             imageStorage.deleteImages(fileNames: item.imageFileNames)
             modelContext.delete(item)
 
@@ -615,6 +655,25 @@ struct DetailView: View {
         item.detectedURLs = info.urls
         item.detectedAddresses = info.addresses
         item.detectedDateStrings = info.formattedDates()
+    }
+
+    private func syncCalendarEventIfNeeded() async throws {
+        guard item.syncsToCalendar,
+              item.hasReminder,
+              !item.isCompleted else {
+            await removeCalendarEventIfNeeded()
+            return
+        }
+
+        let calendarEventIdentifier = try await CalendarSyncService.shared.saveEvent(for: item)
+        item.calendarEventIdentifier = calendarEventIdentifier
+    }
+
+    private func removeCalendarEventIfNeeded() async {
+        let calendarEventIdentifier = item.calendarEventIdentifier
+        item.calendarEventIdentifier = nil
+        item.syncsToCalendar = false
+        try? await CalendarSyncService.shared.deleteEvent(with: calendarEventIdentifier)
     }
 
     private func refreshWidgetSnapshot() {

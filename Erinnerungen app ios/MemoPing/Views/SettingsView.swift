@@ -1,3 +1,4 @@
+import EventKit
 import SwiftData
 import SwiftUI
 import UserNotifications
@@ -8,6 +9,7 @@ struct SettingsView: View {
     @Query private var memoItems: [MemoItem]
 
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
+    @State private var calendarStatus: EKAuthorizationStatus = .notDetermined
     @State private var iCloudState: ICloudAccountState = .couldNotDetermine
     @State private var errorMessage: String?
     @State private var categoryEditor: CategoryEditorDraft?
@@ -75,6 +77,26 @@ struct SettingsView: View {
                 #endif
             }
 
+            Section("iOS-Kalender") {
+                HStack {
+                    Label("Status", systemImage: "calendar")
+                    Spacer()
+                    Text(CalendarSyncService.statusText(for: calendarStatus))
+                        .foregroundStyle(calendarStatusAllowsSync ? Color.green : Color.secondary)
+                }
+
+                Text("MemoPing kann Erinnerungen als Termine im iOS-Kalender erstellen, aktualisieren und beim Löschen wieder entfernen.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    requestCalendarAccess()
+                } label: {
+                    Label("Kalenderzugriff erlauben", systemImage: "calendar.badge.plus")
+                }
+                .disabled(calendarStatusAllowsSync)
+            }
+
             Section("Datenschutz") {
                 Label("Die Synchronisation läuft über Apples iCloud/CloudKit. MemoPing verwendet keinen eigenen Server.", systemImage: "lock")
                 Text("Spracherkennung wird über iOS bereitgestellt. Bilder bleiben in dieser Version als lokale Dateien auf dem jeweiligen Gerät gespeichert.")
@@ -137,6 +159,7 @@ struct SettingsView: View {
         .task {
             seedDefaultCategoriesIfNeeded()
             await refreshNotificationStatus()
+            refreshCalendarStatus()
             await refreshICloudStatus()
         }
         .sheet(item: $categoryEditor) { draft in
@@ -160,6 +183,15 @@ struct SettingsView: View {
         )
     }
 
+    private var calendarStatusAllowsSync: Bool {
+        switch calendarStatus {
+        case .authorized, .fullAccess:
+            return true
+        default:
+            return false
+        }
+    }
+
     private func requestNotifications() {
         Task { @MainActor in
             do {
@@ -177,6 +209,26 @@ struct SettingsView: View {
 
     private func refreshNotificationStatus() async {
         notificationStatus = await NotificationService.shared.getAuthorizationStatus()
+    }
+
+    private func refreshCalendarStatus() {
+        calendarStatus = CalendarSyncService.shared.authorizationStatus()
+    }
+
+    private func requestCalendarAccess() {
+        Task { @MainActor in
+            do {
+                let granted = try await CalendarSyncService.shared.requestAccess()
+                refreshCalendarStatus()
+
+                if !granted {
+                    errorMessage = "Kalenderzugriff wurde nicht erlaubt. Erinnerungen bleiben trotzdem lokal in MemoPing verfügbar."
+                }
+            } catch {
+                refreshCalendarStatus()
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     private func refreshICloudStatus() async {

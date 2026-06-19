@@ -63,7 +63,7 @@ struct CompleteReminderIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
-        let result = try MemoIntentDataProvider.completeReminder(with: reminder.id)
+        let result = try await MemoIntentDataProvider.completeReminder(with: reminder.id)
         return .result(value: result)
     }
 }
@@ -142,7 +142,7 @@ enum MemoIntentDataProvider {
     }
 
     @MainActor
-    static func completeReminder(with id: String) throws -> String {
+    static func completeReminder(with id: String) async throws -> String {
         let context = ModelContext(MemoDataStore.shared.container)
         let descriptor = FetchDescriptor<MemoItem>()
         let items = try context.fetch(descriptor)
@@ -152,8 +152,12 @@ enum MemoIntentDataProvider {
         }
 
         item.isCompleted = true
+        item.syncsToCalendar = false
+        let calendarEventIdentifier = item.calendarEventIdentifier
+        item.calendarEventIdentifier = nil
         item.updatedAt = Date()
         NotificationService.shared.cancelReminder(for: item)
+        try? await CalendarSyncService.shared.deleteEvent(with: calendarEventIdentifier)
         try context.save()
         MemoWidgetSnapshotUpdater.update(from: items)
 

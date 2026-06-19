@@ -44,6 +44,7 @@
 		AAF000000000000000000223 /* MemoPingTodayRemindersWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF000000000000000000125 /* MemoPingTodayRemindersWidget.swift */; };
 		AAF000000000000000000224 /* MemoWidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF000000000000000000122 /* MemoWidgetSnapshotStore.swift */; };
 		AAF000000000000000000225 /* MemoPingWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AAF000000000000000000128 /* MemoPingWidget.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		AAF000000000000000000226 /* CalendarSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF000000000000000000129 /* CalendarSyncService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -111,6 +112,7 @@
 		AAF000000000000000000126 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AAF000000000000000000127 /* MemoPingWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MemoPingWidget.entitlements; sourceTree = "<group>"; };
 		AAF000000000000000000128 /* MemoPingWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MemoPingWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AAF000000000000000000129 /* CalendarSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSyncService.swift; sourceTree = "<group>"; };
 		AAF00000000000000000000C /* MemoPing.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MemoPing.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -221,6 +223,7 @@
 				AAF000000000000000000114 /* NotificationService.swift */,
 				AAF000000000000000000115 /* SpeechRecognitionService.swift */,
 				AAF00000000000000000011D /* ICloudSyncService.swift */,
+				AAF000000000000000000129 /* CalendarSyncService.swift */,
 				AAF00000000000000000011F /* MemoDataStore.swift */,
 				AAF000000000000000000120 /* CaptureRequestCenter.swift */,
 				AAF000000000000000000123 /* MemoWidgetSnapshotUpdater.swift */,
@@ -401,6 +404,7 @@
 				AAF000000000000000000214 /* NotificationService.swift in Sources */,
 				AAF000000000000000000215 /* SpeechRecognitionService.swift in Sources */,
 				AAF00000000000000000021C /* ICloudSyncService.swift in Sources */,
+				AAF000000000000000000226 /* CalendarSyncService.swift in Sources */,
 				AAF00000000000000000021D /* MemoDataStore.swift in Sources */,
 				AAF00000000000000000021E /* CaptureRequestCenter.swift in Sources */,
 				AAF00000000000000000021F /* MemoPingAppIntents.swift in Sources */,
