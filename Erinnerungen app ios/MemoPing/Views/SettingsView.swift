@@ -20,7 +20,11 @@ struct SettingsView: View {
                 settingsHeader
 
                 settingsCard(title: "Benachrichtigungen", systemImage: "bell.badge", tint: RemindlyStyle.cyan) {
-                    statusLine(title: "Status", value: NotificationService.statusText(for: notificationStatus), tint: notificationStatus == .authorized ? RemindlyStyle.success : RemindlyStyle.warning)
+                    StatusRow(
+                        title: "Status",
+                        value: NotificationService.statusText(for: notificationStatus),
+                        tint: notificationStatus == .authorized ? RemindlyStyle.success : RemindlyStyle.warning
+                    )
 
                     Text("Erinnerungen werden lokal auf diesem iPhone geplant.")
                         .font(.subheadline)
@@ -53,7 +57,11 @@ struct SettingsView: View {
                 }
 
                 settingsCard(title: "Sync", systemImage: "icloud", tint: RemindlyStyle.accent) {
-                    statusLine(title: "iCloud", value: iCloudState.displayText, tint: iCloudState == .available ? RemindlyStyle.success : RemindlyStyle.warning)
+                    StatusRow(
+                        title: "iCloud",
+                        value: iCloudState.displayText,
+                        tint: iCloudState == .available ? RemindlyStyle.success : RemindlyStyle.warning
+                    )
 
                     Text("Memos werden über Apples iCloud/CloudKit synchronisiert, wenn iCloud auf diesem Gerät aktiv ist.")
                         .font(.subheadline)
@@ -71,7 +79,11 @@ struct SettingsView: View {
                 }
 
                 settingsCard(title: "iOS-Kalender", systemImage: "calendar.badge.plus", tint: RemindlyStyle.warning) {
-                    statusLine(title: "Status", value: CalendarSyncService.statusText(for: calendarStatus), tint: calendarStatusAllowsSync ? RemindlyStyle.success : RemindlyStyle.warning)
+                    StatusRow(
+                        title: "Status",
+                        value: CalendarSyncService.statusText(for: calendarStatus),
+                        tint: calendarStatusAllowsSync ? RemindlyStyle.success : RemindlyStyle.warning
+                    )
 
                     Text("Erinnerungen können als Termine erstellt, aktualisiert und beim Löschen wieder entfernt werden.")
                         .font(.subheadline)
@@ -108,7 +120,7 @@ struct SettingsView: View {
                 }
 
                 settingsCard(title: "App", systemImage: "app.badge", tint: RemindlyStyle.cyan) {
-                    statusLine(title: "RemindlyAi", value: "Version 1.0", tint: RemindlyStyle.mutedText)
+                    StatusRow(title: "RemindlyAi", value: "Version 1.0", tint: RemindlyStyle.mutedText)
                 }
             }
             .padding(.horizontal, 20)
@@ -178,22 +190,6 @@ struct SettingsView: View {
         }
         .padding(18)
         .remindlyCard()
-    }
-
-    private func statusLine(title: String, value: String, tint: Color) -> some View {
-        HStack(spacing: 12) {
-            Text(title)
-                .foregroundStyle(RemindlyStyle.mutedText)
-
-            Spacer()
-
-            Text(value)
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .font(.subheadline)
     }
 
     private func noteLine(_ text: String, systemImage: String) -> some View {
@@ -381,6 +377,28 @@ struct SettingsView: View {
     #endif
 }
 
+private struct StatusRow: View {
+    let title: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .foregroundStyle(RemindlyStyle.mutedText)
+
+            Spacer()
+
+            Text(value)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .font(.subheadline)
+    }
+}
+
 private struct CategoryEditorDraft: Identifiable {
     let id = UUID()
     var categoryID: String?
@@ -472,4 +490,18 @@ private struct CategoryEditorView: View {
         SettingsView()
     }
     .modelContainer(for: [MemoItem.self, MemoCategoryItem.self], inMemory: true)
+}
+
+#Preview("StatusRow States") {
+    VStack(spacing: 14) {
+        StatusRow(title: "Status", value: "Erlaubt", tint: RemindlyStyle.success)
+        StatusRow(title: "iCloud", value: "Nicht angemeldet", tint: RemindlyStyle.warning)
+        StatusRow(title: "Kalender", value: "Deaktiviert", tint: RemindlyStyle.danger)
+        StatusRow(title: "RemindlyAi", value: "Version 1.0", tint: RemindlyStyle.mutedText)
+    }
+    .padding(18)
+    .remindlyCard()
+    .padding()
+    .background(RemindlyStyle.backgroundGradient)
+    .preferredColorScheme(.dark)
 }
