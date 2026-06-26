@@ -1,382 +1,309 @@
 import SwiftData
 import SwiftUI
 
-private enum HomeDisplayMode: String, CaseIterable, Equatable, Identifiable {
-    case reminders
-    case notes
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .reminders:
-            return "Erinnerungen"
-        case .notes:
-            return "Notizen"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .reminders:
-            return "bell"
-        case .notes:
-            return "doc.text"
-        }
-    }
-
-    var gradient: LinearGradient {
-        switch self {
-        case .reminders:
-            return RemindlyStyle.accentGradient
-        case .notes:
-            return RemindlyStyle.warmGradient
-        }
-    }
-}
-
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \MemoItem.createdAt, order: .reverse) private var items: [MemoItem]
-    @Query(sort: \MemoCategoryItem.sortOrder) private var categories: [MemoCategoryItem]
 
     @StateObject private var viewModel = HomeViewModel()
     @State private var isCapturePresented = false
-    @State private var selectedMode: HomeDisplayMode = .reminders
-    @State private var isSearchVisible = false
     @State private var errorMessage: String?
 
     private let imageStorage = ImageStorageService.shared
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            backgroundView
-                .ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    headerView
-
-                    if isSearchVisible {
-                        searchField
-                    }
-
-                    modePicker
-                    categoryChips
-                    content
+        ZStack(alignment: .bottom) {
+            content
+                .safeAreaInset(edge: .bottom) {
+                    Color.clear.frame(height: 100)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 14)
-                .padding(.bottom, 120)
-            }
 
             CaptureButton {
                 isCapturePresented = true
             }
-            .padding(.trailing, 28)
-            .padding(.bottom, 34)
+            .padding(.bottom, 22)
         }
-        .toolbar(.hidden, for: .navigationBar)
-        .preferredColorScheme(.dark)
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { toolbarContent }
+        .searchable(text: $viewModel.searchText, prompt: "Memos durchsuchen")
+        .background(Color(.systemGroupedBackground))
         .sheet(isPresented: $isCapturePresented) {
-            CaptureView {
-                isCapturePresented = false
-            }
+            CaptureView { isCapturePresented = false }
         }
         .alert("Hinweis", isPresented: errorBinding) {
-            Button("OK", role: .cancel) {
-                errorMessage = nil
-            }
+            Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
         }
-        .task(id: reminderPlanSignature) {
-            await planSyncedRemindersIfNeeded()
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            Text("MemoPing")
+                .font(.headline)
         }
-        .task {
-            seedDefaultCategoriesIfNeeded()
-        }
-        .task(id: widgetSnapshotSignature) {
-            MemoWidgetSnapshotUpdater.update(from: items)
+        ToolbarItem(placement: .topBarTrailing) {
+            categoryFilterMenu
         }
     }
 
+    // MARK: - Content
+
     @ViewBuilder
     private var content: some View {
-        let groups = viewModel.sectionGroups(from: modeItems, categories: categories)
+        let groups = viewModel.sectionGroups(from: items)
 
         if items.isEmpty {
             emptyState(
                 title: "Noch keine Memos",
-                systemImage: "sparkles",
-                message: "Tippe auf den großen Button, um deine erste Notiz oder Erinnerung zu erfassen."
+                subtitle: "Tippe auf den Button unten, um deine erste Notiz oder Erinnerung zu erfassen.",
+                systemImage: "sparkles"
             )
         } else if groups.isEmpty {
             emptyState(
                 title: "Keine Ergebnisse",
-                systemImage: "magnifyingglass",
-                message: "Versuche einen anderen Suchbegriff oder entferne den Filter."
+                subtitle: "Versuche einen anderen Suchbegriff oder entferne den Filter.",
+                systemImage: "magnifyingglass"
             )
         } else {
-            LazyVStack(alignment: .leading, spacing: 18) {
-                ForEach(groups) { group in
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(group.section.title)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.58))
-                            .textCase(.uppercase)
+            ScrollView {
+                // Fix A: Header-Card mit Tagesübersicht
+                summaryHeader(groups: groups)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
 
-                        ForEach(group.items) { item in
-                            NavigationLink {
-                                DetailView(item: item)
-                            } label: {
-                                MemoCardView(
-                                    item: item,
-                                    category: category(for: item),
-                                    onToggleCompleted: {
+                // Fix A: Filter-Chips
+                categoryFilterChips
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+
+                // Memo-Liste
+                LazyVStack(spacing: 0, pinnedViews: .sectionHeaders) {
+                    ForEach(groups) { group in
+                        Section {
+                            ForEach(group.items) { item in
+                                NavigationLink {
+                                    DetailView(item: item)
+                                } label: {
+                                    MemoCardView(item: item)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 4)
+                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                    Button {
                                         toggleCompleted(item)
-                                    },
-                                    onDelete: {
-                                        delete(item)
+                                    } label: {
+                                        Label(
+                                            item.isCompleted ? "Offen" : "Erledigt",
+                                            systemImage: item.isCompleted ? "circle" : "checkmark"
+                                        )
                                     }
-                                )
+                                    .tint(.green)
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        delete(item)
+                                    } label: {
+                                        Label("Löschen", systemImage: "trash")
+                                    }
+                                }
                             }
-                            .buttonStyle(.plain)
+                        } header: {
+                            sectionHeader(group.section.title)
                         }
                     }
                 }
+                .padding(.top, 8)
+                .animation(.snappy(duration: 0.2), value: viewModel.searchText)
+                .animation(.snappy(duration: 0.2), value: viewModel.selectedCategory)
             }
-            .animation(.snappy(duration: 0.2), value: viewModel.searchText)
-            .animation(.snappy(duration: 0.2), value: viewModel.selectedCategoryRawValue)
-            .animation(.snappy(duration: 0.2), value: selectedMode)
         }
     }
 
-    private var backgroundView: some View {
-        RemindlyStyle.backgroundGradient
-    }
+    // MARK: - Summary Header (Fix A)
 
-    private var headerView: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("RemindlyAi")
-                        .font(.caption.weight(.bold))
+    private func summaryHeader(groups: [MemoSectionGroup]) -> some View {
+        let openCount = groups.filter { $0.section != .completed }.flatMap(\.items).count
+        let doneCount = groups.first(where: { $0.section == .completed })?.items.count ?? 0
+        let highCount = groups.flatMap(\.items).filter { $0.priority == .high && !$0.isCompleted }.count
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(todayLabel)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
                         .textCase(.uppercase)
-                        .foregroundStyle(RemindlyStyle.cyan)
+                        .tracking(0.5)
 
-                    Text("Heute im Blick")
-                        .font(.system(size: 36, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
-
-                    Text("\(openReminderCount) offen, \(completedCount) erledigt")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(RemindlyStyle.mutedText)
+                    Text("Dein Überblick")
+                        .font(.title2.weight(.bold))
                 }
-
                 Spacer()
-
-                HStack(spacing: 10) {
-                    iconCircle(isSearchVisible ? "xmark" : "magnifyingglass") {
-                        withAnimation(.snappy(duration: 0.2)) {
-                            isSearchVisible.toggle()
-                        }
-                    }
-
-                    NavigationLink {
-                        SettingsView()
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 50, height: 50)
-                            .background(RemindlyStyle.elevatedFill, in: Circle())
-                            .overlay(Circle().strokeBorder(RemindlyStyle.border))
-                    }
-                    .buttonStyle(RemindlyPressStyle())
-                }
-            }
-
-            HStack(alignment: .bottom, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(modeItems.count)")
-                        .font(.system(size: 64, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .minimumScaleFactor(0.7)
-
-                    Label(selectedMode.title, systemImage: selectedMode.systemImage)
-                        .font(.headline)
-                        .foregroundStyle(RemindlyStyle.mutedText)
-                }
-
-                Spacer()
-
-                Button {
-                    isCapturePresented = true
-                } label: {
-                    Label("Erfassen", systemImage: "mic.fill")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .frame(height: 46)
-                        .background(RemindlyStyle.accentGradient, in: Capsule())
-                }
-                .buttonStyle(RemindlyPressStyle())
             }
 
             HStack(spacing: 10) {
-                dashboardStat(title: "Notizen", value: "\(notesCount)", systemImage: "doc.text", tint: RemindlyStyle.cyan)
-                dashboardStat(title: "Hoch", value: "\(highPriorityCount)", systemImage: "exclamationmark.circle", tint: RemindlyStyle.danger)
-                dashboardStat(title: "Bilder", value: "\(imageMemoCount)", systemImage: "photo", tint: RemindlyStyle.warning)
+                statPill(count: openCount, label: "Offen", systemImage: "circle", tint: .accentColor)
+                statPill(count: doneCount, label: "Erledigt", systemImage: "checkmark.circle.fill", tint: .green)
+                if highCount > 0 {
+                    statPill(count: highCount, label: "Dringend", systemImage: "exclamationmark.circle.fill", tint: .red)
+                }
             }
         }
-        .padding(20)
-        .background {
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(RemindlyStyle.quietGradient)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .fill(RemindlyStyle.accent.opacity(0.16))
-                }
-        }
+        .padding(16)
+        .background(
+            Color(.secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
         .overlay {
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.18))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06))
         }
     }
 
-    private var searchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.white.opacity(0.55))
-
-            TextField("Suchen", text: $viewModel.searchText)
-                .textInputAutocapitalization(.never)
-                .foregroundStyle(.white)
-
-            if !viewModel.searchText.isEmpty {
-                Button {
-                    viewModel.searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.white.opacity(0.5))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 16)
-        .frame(height: 54)
-        .background(RemindlyStyle.elevatedFill, in: RoundedRectangle(cornerRadius: RemindlyStyle.controlRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: RemindlyStyle.controlRadius, style: .continuous)
-                .strokeBorder(RemindlyStyle.border)
-        }
+    private var todayLabel: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "de_DE")
+        formatter.dateFormat = "EEEE, d. MMMM"
+        return formatter.string(from: Date())
     }
 
-    private var modePicker: some View {
-        HStack(spacing: 8) {
-            ForEach(HomeDisplayMode.allCases) { mode in
-                Button {
-                    selectedMode = mode
-                } label: {
-                    Label(mode.title, systemImage: mode.systemImage)
-                        .font(.headline)
-                        .foregroundStyle(Color.white.opacity(selectedMode == mode ? 1.0 : 0.52))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 54)
-                        .background {
-                            if selectedMode == mode {
-                                mode.gradient
-                            } else {
-                                RemindlyStyle.cardFill
-                            }
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: RemindlyStyle.controlRadius, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: RemindlyStyle.controlRadius, style: .continuous)
-                                .strokeBorder(selectedMode == mode ? Color.clear : RemindlyStyle.border)
-                        }
-                }
-                .buttonStyle(RemindlyPressStyle())
+    private func statPill(count: Int, label: String, systemImage: String, tint: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("\(count)")
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(.primary)
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(5)
-        .background(RemindlyStyle.cardFill, in: RoundedRectangle(cornerRadius: 23, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 23, style: .continuous)
-                .strokeBorder(RemindlyStyle.border)
-        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private var categoryChips: some View {
+    // MARK: - Category Filter Chips (Fix A)
+
+    private var categoryFilterChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                categoryChip(
-                    title: "Alle",
-                    systemImage: "square.stack.3d.up",
-                    color: RemindlyStyle.accent,
-                    isSelected: viewModel.selectedCategoryRawValue == nil
-                ) {
-                    viewModel.selectedCategoryRawValue = nil
+            HStack(spacing: 8) {
+                filterChip(label: "Alle", systemImage: "tray.2", isActive: viewModel.selectedCategory == nil) {
+                    viewModel.selectedCategory = nil
                 }
 
-                ForEach(categories, id: \.id) { category in
-                    categoryChip(
-                        title: category.displayName,
+                ForEach(MemoCategory.allCases) { category in
+                    filterChip(
+                        label: category.displayName,
                         systemImage: category.systemImage,
-                        color: category.tint,
-                        isSelected: viewModel.selectedCategoryRawValue == category.id
+                        isActive: viewModel.selectedCategory == category,
+                        tint: category.tint
                     ) {
-                        viewModel.selectedCategoryRawValue = category.id
+                        viewModel.selectedCategory = (viewModel.selectedCategory == category) ? nil : category
                     }
                 }
-
-                NavigationLink {
-                    SettingsView()
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(RemindlyStyle.accent)
-                        .frame(width: 50, height: 50)
-                        .background(RemindlyStyle.cardFill, in: Circle())
-                        .overlay(Circle().strokeBorder(RemindlyStyle.border))
-                }
-                .buttonStyle(RemindlyPressStyle())
             }
             .padding(.vertical, 2)
         }
     }
 
-    private var modeItems: [MemoItem] {
-        switch selectedMode {
-        case .reminders:
-            return items.filter { $0.hasReminder || ($0.isCompleted && $0.reminderDate != nil) }
-        case .notes:
-            return items.filter { !$0.hasReminder }
+    private func filterChip(
+        label: String,
+        systemImage: String,
+        isActive: Bool,
+        tint: Color = .accentColor,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: systemImage)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(isActive ? .white : tint)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(
+                    isActive ? tint : tint.opacity(0.12),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(.plain)
+        .animation(.snappy(duration: 0.15), value: isActive)
+    }
+
+    // MARK: - Section Header
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .tracking(0.5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 4)
+            .background(Color(.systemGroupedBackground))
+    }
+
+    // MARK: - Empty State
+
+    private func emptyState(title: String, subtitle: String, systemImage: String) -> some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: systemImage)
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(.tertiary)
+            Text(title)
+                .font(.title3.weight(.semibold))
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            Spacer()
         }
     }
 
-    private var completedCount: Int {
-        modeItems.filter(\.isCompleted).count
+    // MARK: - Category Filter Menu (Toolbar)
+
+    private var categoryFilterMenu: some View {
+        Menu {
+            Button {
+                viewModel.selectedCategory = nil
+            } label: {
+                Label(
+                    "Alle Kategorien",
+                    systemImage: viewModel.selectedCategory == nil ? "checkmark" : "tray.2"
+                )
+            }
+            Divider()
+            ForEach(MemoCategory.allCases) { category in
+                Button {
+                    viewModel.selectedCategory = category
+                } label: {
+                    Label(
+                        category.displayName,
+                        systemImage: viewModel.selectedCategory == category ? "checkmark" : category.systemImage
+                    )
+                }
+            }
+        } label: {
+            Image(systemName: viewModel.selectedCategory == nil
+                  ? "line.3.horizontal.decrease.circle"
+                  : "line.3.horizontal.decrease.circle.fill")
+        }
+        .accessibilityLabel("Kategorie filtern")
     }
 
-    private var openReminderCount: Int {
-        items.filter { $0.hasReminder && !$0.isCompleted }.count
-    }
-
-    private var notesCount: Int {
-        items.filter { !$0.hasReminder }.count
-    }
-
-    private var highPriorityCount: Int {
-        items.filter { !$0.isCompleted && $0.priority == .high }.count
-    }
-
-    private var imageMemoCount: Int {
-        items.filter { !$0.imageFileNames.isEmpty }.count
-    }
+    // MARK: - Bindings & Actions
 
     private var errorBinding: Binding<Bool> {
         Binding(
@@ -385,156 +312,21 @@ struct HomeView: View {
         )
     }
 
-    private var reminderPlanSignature: String {
-        items
-            .filter { $0.hasReminder && !$0.isCompleted && $0.reminderDate != nil }
-            .map { "\($0.id.uuidString)-\($0.reminderDate?.timeIntervalSince1970 ?? 0)-\($0.reminderRepeatRawValue ?? "")-\($0.reminderLeadTimeRawValue ?? "")" }
-            .joined(separator: "|")
-    }
-
-    private var widgetSnapshotSignature: String {
-        items
-            .map { item in
-                [
-                    item.id.uuidString,
-                    item.title,
-                    "\(item.hasReminder)",
-                    "\(item.isCompleted)",
-                    "\(item.reminderDate?.timeIntervalSince1970 ?? 0)"
-                ].joined(separator: "-")
-            }
-            .joined(separator: "|")
-    }
-
-    private func deleteItems(at offsets: IndexSet, in sectionItems: [MemoItem]) {
-        offsets.map { sectionItems[$0] }.forEach(delete)
-    }
-
-    private func iconCircle(_ systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 50, height: 50)
-                .background(RemindlyStyle.elevatedFill, in: Circle())
-                .overlay(Circle().strokeBorder(RemindlyStyle.border))
-        }
-        .buttonStyle(RemindlyPressStyle())
-    }
-
-    private func dashboardStat(title: String, value: String, systemImage: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: systemImage)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(tint)
-
-            Text(value)
-                .font(.title3.weight(.black))
-                .foregroundStyle(.white)
-
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(RemindlyStyle.faintText)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: RemindlyStyle.pillRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: RemindlyStyle.pillRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08))
-        }
-    }
-
-    private func categoryChip(
-        title: String,
-        systemImage: String,
-        color: Color,
-        isSelected: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(Color.white.opacity(isSelected ? 1.0 : 0.62))
-                .padding(.horizontal, 18)
-                .frame(height: 50)
-                .background(isSelected ? color.opacity(0.24) : RemindlyStyle.cardFill, in: Capsule())
-                .overlay {
-                    Capsule()
-                        .strokeBorder(isSelected ? color.opacity(0.72) : color.opacity(0.42), lineWidth: 1)
-                }
-        }
-        .buttonStyle(RemindlyPressStyle())
-    }
-
-    private func emptyState(title: String, systemImage: String, message: String) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 34, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.72))
-
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(.white)
-
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.58))
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(28)
-        .background(RemindlyStyle.cardFill, in: RoundedRectangle(cornerRadius: RemindlyStyle.cardRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: RemindlyStyle.cardRadius, style: .continuous)
-                .strokeBorder(RemindlyStyle.border)
-        }
-    }
-
-    private func category(for item: MemoItem) -> MemoCategoryItem? {
-        MemoCategoryItem.item(for: item.categoryRawValue, in: categories)
-    }
-
-    private func seedDefaultCategoriesIfNeeded() {
-        do {
-            try MemoCategoryItem.seedDefaultsIfNeeded(in: modelContext)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
     private func toggleCompleted(_ item: MemoItem) {
-        let previousCompletionState = item.isCompleted
-        let previousCalendarSyncState = item.syncsToCalendar
-        let previousCalendarEventIdentifier = item.calendarEventIdentifier
+        let previous = item.isCompleted
         item.isCompleted.toggle()
-
-        if item.isCompleted {
-            item.syncsToCalendar = false
-            item.calendarEventIdentifier = nil
-        }
-
         item.updatedAt = Date()
 
         Task { @MainActor in
             do {
                 if item.isCompleted {
                     NotificationService.shared.cancelReminder(for: item)
-                    try? await CalendarSyncService.shared.deleteEvent(with: previousCalendarEventIdentifier)
                 } else if item.hasReminder {
                     try await NotificationService.shared.scheduleReminder(for: item)
-
-                    if item.syncsToCalendar {
-                        item.calendarEventIdentifier = try await CalendarSyncService.shared.saveEvent(for: item)
-                    }
                 }
                 try modelContext.save()
-                MemoWidgetSnapshotUpdater.update(from: items)
             } catch {
-                item.isCompleted = previousCompletionState
-                item.syncsToCalendar = previousCalendarSyncState
-                item.calendarEventIdentifier = previousCalendarEventIdentifier
+                item.isCompleted = previous
                 item.updatedAt = Date()
                 errorMessage = error.localizedDescription
             }
@@ -544,34 +336,12 @@ struct HomeView: View {
     private func delete(_ item: MemoItem) {
         Task { @MainActor in
             NotificationService.shared.cancelReminder(for: item)
-            try? await CalendarSyncService.shared.deleteEvent(with: item.calendarEventIdentifier)
             imageStorage.deleteImages(fileNames: item.imageFileNames)
             modelContext.delete(item)
-
             do {
                 try modelContext.save()
-                MemoWidgetSnapshotUpdater.update(from: items)
             } catch {
                 errorMessage = error.localizedDescription
-            }
-        }
-    }
-
-    private func planSyncedRemindersIfNeeded() async {
-        let notificationStatus = await NotificationService.shared.getAuthorizationStatus()
-        guard notificationStatus == .authorized || notificationStatus == .provisional || notificationStatus == .ephemeral else {
-            return
-        }
-
-        for item in items where item.hasReminder && !item.isCompleted {
-            guard item.reminderDate != nil else { continue }
-
-            do {
-                try await NotificationService.shared.scheduleReminder(for: item)
-            } catch {
-                #if DEBUG
-                print("MemoPing: Lokale Erinnerung konnte nach Sync nicht geplant werden: \(error)")
-                #endif
             }
         }
     }
@@ -579,5 +349,5 @@ struct HomeView: View {
 
 #Preview {
     HomeView()
-        .modelContainer(for: [MemoItem.self, MemoCategoryItem.self], inMemory: true)
+        .modelContainer(for: MemoItem.self, inMemory: true)
 }
