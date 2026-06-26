@@ -2,158 +2,148 @@ import SwiftUI
 
 struct MemoCardView: View {
     let item: MemoItem
-    var category: MemoCategoryItem? = nil
-    var onToggleCompleted: (() -> Void)?
-    var onDelete: (() -> Void)? = nil
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(spacing: 8) {
-                Button {
-                    onToggleCompleted?()
-                } label: {
-                    ZStack {
-                        Circle()
-                            .strokeBorder(item.isCompleted ? RemindlyStyle.success : cardTint, lineWidth: 3)
-                            .frame(width: 34, height: 34)
+        VStack(alignment: .leading, spacing: 10) {
+            // MARK: - Titelzeile
+            HStack(alignment: .top, spacing: 12) {
+                // Status-Icon
+                statusIcon
+                    .frame(width: 28, height: 28)
+                    .accessibilityHidden(true)
 
-                        if item.isCompleted {
-                            Image(systemName: "checkmark")
-                                .font(.caption.weight(.black))
-                                .foregroundStyle(RemindlyStyle.success)
-                        }
-                    }
-                }
-                .buttonStyle(.borderless)
-                .disabled(onToggleCompleted == nil)
-                .accessibilityLabel(item.isCompleted ? "Als offen markieren" : "Als erledigt markieren")
-
-                if item.hasReminder {
-                    Image(systemName: "bell.fill")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(cardTint)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    if let category {
-                        Label(category.displayName, systemImage: category.systemImage)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(category.tint)
-                            .lineLimit(1)
-                    } else {
-                        Label(item.hasReminder ? "Erinnerung" : "Notiz", systemImage: item.hasReminder ? "bell" : "doc.text")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(cardTint)
-                    }
-
-                    Spacer(minLength: 6)
-
-                    if item.priority != .normal {
-                        Label(item.priority.displayName, systemImage: item.priority.systemImage)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(item.priority.tint)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 3) {
+                    // Titel
                     Text(item.title)
-                        .font(.title3.weight(.black))
-                        .foregroundStyle(Color.white.opacity(item.isCompleted ? 0.45 : 1.0))
+                        .font(.headline)
+                        .foregroundStyle(item.isCompleted ? .secondary : .primary)
                         .strikethrough(item.isCompleted)
                         .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    Text(item.previewText)
-                        .font(.body)
-                        .foregroundStyle(.white.opacity(0.62))
-                        .lineLimit(3)
+                    // Fix C: Vorschautext nur anzeigen wenn er sich vom Titel unterscheidet
+                    // und nicht leer ist
+                    if shouldShowPreviewText {
+                        Text(item.previewText)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
-                metadataRow
+                Spacer(minLength: 4)
+
+                // Bild-Indikator
+                if !item.imageFileNames.isEmpty {
+                    Image(systemName: "photo")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Enthält \(item.imageFileNames.count) Bild(er)")
+                }
             }
 
-            if let onDelete {
-                Button(role: .destructive) {
-                    onDelete()
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(RemindlyStyle.danger)
-                        .frame(width: 34, height: 34)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Memo löschen")
-            }
+            // MARK: - Badge-Zeile
+            badgeRow
         }
-        .padding(16)
-        .background(cardBackground, in: RoundedRectangle(cornerRadius: RemindlyStyle.cardRadius, style: .continuous))
+        .padding(14)
+        .background(
+            Color(.secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
         .overlay {
-            RoundedRectangle(cornerRadius: RemindlyStyle.cardRadius, style: .continuous)
-                .strokeBorder(cardTint.opacity(0.30), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06))
         }
-        .overlay(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(cardTint)
-                .frame(width: 4)
-                .padding(.vertical, 18)
-        }
-        .opacity(item.isCompleted ? 0.72 : 1)
+        .opacity(item.isCompleted ? 0.7 : 1)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 
-    private var cardTint: Color {
-        if let category {
-            return category.tint
-        }
+    // MARK: - Fix C: Vorschau nur wenn anders als Titel
 
-        if item.priority != .normal {
-            return item.priority.tint
-        }
+    /// Zeigt den Vorschautext nur an, wenn er sich inhaltlich vom Titel unterscheidet.
+    /// Verhindert doppelte Anzeige wenn der Titel aus dem Bodytext generiert wurde.
+    private var shouldShowPreviewText: Bool {
+        let preview = item.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if item.hasReminder {
-            return RemindlyStyle.accent
-        }
+        guard !preview.isEmpty else { return false }
 
-        return RemindlyStyle.pink
+        // Wenn der Titel mit dem Anfang des Vorschautexts übereinstimmt → nicht nochmal zeigen
+        // (Titel wird aus den ersten 6 Wörtern des Bodytexts generiert)
+        let previewStart = preview
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .prefix(6)
+            .joined(separator: " ")
+
+        return !title.hasPrefix(previewStart.prefix(min(previewStart.count, title.count)))
+            && title.lowercased() != preview.lowercased().prefix(title.count).description
     }
 
-    private var cardBackground: LinearGradient {
-        RemindlyStyle.tintedCardGradient(cardTint)
+    // MARK: - Status Icon
+
+    @ViewBuilder
+    private var statusIcon: some View {
+        if item.isCompleted {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .font(.title3.weight(.semibold))
+        } else if item.hasReminder {
+            Image(systemName: "bell.circle.fill")
+                .foregroundStyle(item.priority.tint)
+                .font(.title3.weight(.semibold))
+        } else if !item.imageFileNames.isEmpty {
+            Image(systemName: "photo.circle.fill")
+                .foregroundStyle(item.priority.tint)
+                .font(.title3.weight(.semibold))
+        } else {
+            Image(systemName: "note.text")
+                .foregroundStyle(item.priority.tint)
+                .font(.title3.weight(.semibold))
+        }
     }
 
-    private var metadataRow: some View {
+    // MARK: - Badge Zeile
+
+    private var badgeRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                // Kategorie
+                if let category = item.category {
+                    memoBadge(category.displayName, systemImage: category.systemImage, tint: category.tint)
+                }
+
+                // Priorität (nur wenn nicht normal — Normal ist der Default und braucht keinen Badge)
+                if item.priority != .normal {
+                    memoBadge(item.priority.displayName, systemImage: item.priority.systemImage, tint: item.priority.tint)
+                }
+
+                // Erinnerungsdatum
                 if item.hasReminder, let reminderDate = item.reminderDate {
-                    memoBadge(reminderDate.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar", tint: RemindlyStyle.cyan)
-
-                    if item.reminderRepeatRule.isRepeating {
-                        memoBadge(item.reminderRepeatRule.displayName, systemImage: item.reminderRepeatRule.systemImage, tint: .secondary)
-                    }
-
-                    if item.reminderLeadTime.hasLeadNotification {
-                        memoBadge(item.reminderLeadTime.shortDisplayName, systemImage: item.reminderLeadTime.systemImage, tint: .secondary)
-                    }
+                    memoBadge(
+                        reminderDate.formatted(date: .abbreviated, time: .shortened),
+                        systemImage: "bell",
+                        tint: .secondary
+                    )
                 }
 
+                // Erkannte Daten — kompakte Icons
                 if !item.detectedPhoneNumbers.isEmpty {
-                    memoBadge("Telefon", systemImage: "phone", tint: RemindlyStyle.mutedText)
+                    iconBadge("phone", label: "Telefonnummer erkannt")
                 }
-
                 if !item.detectedURLs.isEmpty {
-                    memoBadge("Link", systemImage: "link", tint: RemindlyStyle.mutedText)
+                    iconBadge("link", label: "Link erkannt")
                 }
-
                 if !item.detectedDateStrings.isEmpty {
-                    memoBadge("Datum", systemImage: "calendar.badge.clock", tint: RemindlyStyle.mutedText)
+                    iconBadge("calendar", label: "Datum erkannt")
                 }
             }
-            .padding(.vertical, 1)
         }
-        .accessibilityLabel("Details zur Erinnerung")
     }
+
+    // MARK: - Badge Komponenten
 
     private func memoBadge(_ title: String, systemImage: String, tint: Color) -> some View {
         Label(title, systemImage: systemImage)
@@ -161,9 +151,17 @@ struct MemoCardView: View {
             .font(.caption.weight(.medium))
             .foregroundStyle(tint)
             .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(tint.opacity(0.14), in: Capsule())
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+
+    private func iconBadge(_ systemImage: String, label: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(width: 26, height: 26)
+            .background(Color(.tertiarySystemGroupedBackground), in: Circle())
+            .accessibilityLabel(label)
     }
 }
