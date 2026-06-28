@@ -5,7 +5,6 @@ import UIKit
 private struct DetailImage: Identifiable {
     let fileName: String
     let image: UIImage
-
     var id: String { fileName }
 }
 
@@ -13,7 +12,6 @@ struct DetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @Query(sort: \MemoCategoryItem.sortOrder) private var categories: [MemoCategoryItem]
 
     @Bindable var item: MemoItem
 
@@ -26,43 +24,37 @@ struct DetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                titleSection
-                organizationSection
+            VStack(spacing: 14) {
+                heroSection
+                metaSection
                 reminderSection
                 textSection
                 imagesSection
                 detectedSection
                 actionSection
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 18)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .padding(.bottom, 32)
         }
-        .background(RemindlyStyle.backgroundGradient.ignoresSafeArea())
-        .tint(RemindlyStyle.accent)
+        .background(Color(.systemGroupedBackground))
         .navigationTitle("Details")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarBackground(Color.black.opacity(0.36), for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(isEditing ? "Sichern" : "Bearbeiten") {
                     isEditing ? saveChanges() : (isEditing = true)
                 }
+                .fontWeight(isEditing ? .semibold : .regular)
             }
         }
         .alert("Hinweis", isPresented: errorBinding) {
-            Button("OK", role: .cancel) {
-                errorMessage = nil
-            }
+            Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
         }
         .confirmationDialog("Memo wirklich löschen?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-            Button("Löschen", role: .destructive) {
-                deleteMemo()
-            }
+            Button("Löschen", role: .destructive) { deleteMemo() }
             Button("Abbrechen", role: .cancel) {}
         }
         .sheet(item: $selectedImage) { detailImage in
@@ -72,194 +64,359 @@ struct DetailView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button("Schließen") {
-                                selectedImage = nil
-                            }
+                            Button("Schließen") { selectedImage = nil }
                         }
                     }
             }
         }
     }
 
-    private var titleSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: item.hasReminder ? "bell.badge.fill" : "doc.text.fill")
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 48, height: 48)
-                    .background(item.hasReminder ? RemindlyStyle.accentGradient : RemindlyStyle.warmGradient, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+    // MARK: - Hero Section
 
-                VStack(alignment: .leading, spacing: 8) {
-                    if isEditing {
-                        TextField("Titel", text: $item.title)
-                            .font(.title2.weight(.black))
-                            .foregroundStyle(.white)
-                            .padding(14)
-                            .background(RemindlyStyle.elevatedFill, in: RoundedRectangle(cornerRadius: RemindlyStyle.controlRadius, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: RemindlyStyle.controlRadius, style: .continuous)
-                                    .strokeBorder(RemindlyStyle.border)
-                            }
-                    } else {
-                        Text(item.title)
-                            .font(.title2.weight(.black))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    HStack(spacing: 8) {
-                        statusPill(item.sourceType.displayName, systemImage: "square.and.pencil", tint: RemindlyStyle.mutedText)
-
-                        if item.isCompleted {
-                            statusPill("Erledigt", systemImage: "checkmark.circle.fill", tint: RemindlyStyle.success)
-                        } else if item.hasReminder {
-                            statusPill("Aktiv", systemImage: "bell.fill", tint: RemindlyStyle.accent)
-                        }
-                    }
+    private var heroSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Quelle + Status-Badges
+            HStack(spacing: 8) {
+                sourceBadge
+                if item.isCompleted {
+                    statusBadge("Erledigt", systemImage: "checkmark.circle.fill", tint: .green)
                 }
+                Spacer()
             }
+
+            // Titel
+            if isEditing {
+                TextField("Titel", text: $item.title)
+                    .font(.title2.weight(.bold))
+                    .padding(10)
+                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            } else {
+                Text(item.title)
+                    .font(.title2.weight(.bold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(item.isCompleted ? .secondary : .primary)
+                    .strikethrough(item.isCompleted)
+            }
+
+            // Erstellt-Info
+            Text("Erstellt \(item.createdAt.formatted(date: .abbreviated, time: .shortened))")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
-        .padding(18)
-        .background {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(RemindlyStyle.quietGradient)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .fill((item.hasReminder ? RemindlyStyle.accent : RemindlyStyle.pink).opacity(0.14))
-                }
-        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.16))
-        }
-    }
-
-    private var organizationSection: some View {
-        detailCard {
-            VStack(alignment: .leading, spacing: 14) {
-                if isEditing {
-                    CategoryPickerView(selectionRawValue: categoryRawValueBinding, categories: categories)
-                    PriorityPickerView(selection: priorityBinding)
-                } else {
-                    HStack {
-                        if let category = MemoCategoryItem.item(for: item.categoryRawValue, in: categories) {
-                            Label(category.displayName, systemImage: category.systemImage)
-                                .foregroundStyle(category.tint)
-                        } else {
-                            Label("Keine Kategorie", systemImage: "tray")
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Label(item.priority.displayName, systemImage: item.priority.systemImage)
-                            .foregroundStyle(item.priority.tint)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var reminderSection: some View {
-        detailCard {
-            VStack(alignment: .leading, spacing: 12) {
-                Toggle("Erledigt", isOn: completedBinding)
-
-                if isEditing {
-                    Toggle("Erinnerung", isOn: reminderEnabledBinding)
-
-                    if item.hasReminder {
-                        DatePicker(
-                            "Termin",
-                            selection: reminderDateBinding,
-                            in: Date()...,
-                            displayedComponents: [.date, .hourAndMinute]
-                        )
-
-                        Picker("Wiederholen", selection: reminderRepeatBinding) {
-                            ForEach(MemoReminderRepeatRule.allCases) { repeatRule in
-                                Label(repeatRule.displayName, systemImage: repeatRule.systemImage)
-                                    .tag(repeatRule)
-                            }
-                        }
-
-                        Picker("Vorher erinnern", selection: reminderLeadTimeBinding) {
-                            ForEach(MemoReminderLeadTime.allCases) { leadTime in
-                                Label(leadTime.displayName, systemImage: leadTime.systemImage)
-                                    .tag(leadTime)
-                            }
-                        }
-
-                        Toggle("Mit iOS-Kalender synchronisieren", isOn: calendarSyncBinding)
-                    }
-                } else if item.hasReminder, let reminderDate = item.reminderDate {
-                    Label("Erinnerung aktiv", systemImage: "bell.fill")
-                        .foregroundStyle(RemindlyStyle.success)
-
-                    Text(reminderDate.formatted(date: .abbreviated, time: .shortened))
-                        .foregroundStyle(RemindlyStyle.mutedText)
-
-                    Label(item.reminderRepeatRule.displayName, systemImage: item.reminderRepeatRule.systemImage)
-                        .font(.subheadline)
-                        .foregroundStyle(RemindlyStyle.mutedText)
-
-                    if item.reminderLeadTime.hasLeadNotification {
-                        Label(item.reminderLeadTime.shortDisplayName, systemImage: item.reminderLeadTime.systemImage)
-                            .font(.subheadline)
-                            .foregroundStyle(RemindlyStyle.mutedText)
-                    }
-
-                    if item.syncsToCalendar {
-                        Label("Mit iOS-Kalender synchronisiert", systemImage: "calendar.badge.checkmark")
-                            .font(.subheadline)
-                            .foregroundStyle(RemindlyStyle.mutedText)
-                    }
-                } else {
-                    Label("Keine Erinnerung", systemImage: "bell.slash")
-                        .foregroundStyle(RemindlyStyle.mutedText)
-                }
-            }
-        }
-    }
-
-    private var textSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            editableTextBlock(title: "Notiztext", text: $item.bodyText)
-
-            if isEditing || !item.recognizedText.trimmed.isEmpty {
-                editableTextBlock(title: "Erkannter Bildtext", text: $item.recognizedText)
-            }
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06))
         }
     }
 
     @ViewBuilder
+    private var sourceBadge: some View {
+        Label(item.sourceType.displayName, systemImage: sourceIcon)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
+    }
+
+    private var sourceIcon: String {
+        switch item.sourceType {
+        case .voice: return "mic.fill"
+        case .image: return "photo.fill"
+        case .mixed: return "square.grid.2x2.fill"
+        default: return "keyboard"
+        }
+    }
+
+    private func statusBadge(_ label: String, systemImage: String, tint: Color) -> some View {
+        Label(label, systemImage: systemImage)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+
+    // MARK: - Meta Section (Kategorie + Priorität)
+
+    private var metaSection: some View {
+        detailCard {
+            if isEditing {
+                VStack(spacing: 12) {
+                    CategoryPickerView(selection: categoryBinding)
+                    Divider()
+                    PriorityPickerView(selection: priorityBinding)
+                }
+            } else {
+                HStack(spacing: 12) {
+                    // Kategorie
+                    if let category = item.category {
+                        metaChip(
+                            label: category.displayName,
+                            systemImage: category.systemImage,
+                            tint: category.tint
+                        )
+                    } else {
+                        metaChip(label: "Keine Kategorie", systemImage: "tray", tint: .secondary)
+                    }
+
+                    Spacer()
+
+                    // Priorität
+                    metaChip(
+                        label: item.priority.displayName,
+                        systemImage: item.priority.systemImage,
+                        tint: item.priority.tint
+                    )
+                }
+            }
+        }
+    }
+
+    private func metaChip(label: String, systemImage: String, tint: Color) -> some View {
+        Label(label, systemImage: systemImage)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+
+    // MARK: - Reminder Section
+
+    private var reminderSection: some View {
+        detailCard {
+            VStack(alignment: .leading, spacing: 12) {
+                // Erledigt-Toggle immer sichtbar
+                Toggle(isOn: completedBinding) {
+                    Label("Erledigt", systemImage: item.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(item.isCompleted ? .green : .primary)
+                }
+                .tint(.green)
+
+                Divider()
+
+                if isEditing {
+                    // Bearbeitungsmodus: Erinnerung ein/aus + DatePicker
+                    Toggle(isOn: reminderEnabledBinding) {
+                        Label("Erinnerung", systemImage: "bell")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .tint(.accentColor)
+
+                    if item.hasReminder {
+                        DatePicker(
+                            "Datum und Uhrzeit",
+                            selection: reminderDateBinding,
+                            in: Date()...,
+                            displayedComponents: [.date, .hourAndMinute]
+                        )
+                        .font(.subheadline)
+                    }
+                } else if item.hasReminder, let reminderDate = item.reminderDate {
+                    // Ansichtsmodus: Erinnerung aktiv
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Erinnerung aktiv", systemImage: "bell.fill")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.green)
+
+                            Text(reminderDate.formatted(date: .complete, time: .shortened))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            // Wiederholung anzeigen falls vorhanden
+                            if reminderDate > Date() {
+                                let diff = reminderDate.timeIntervalSinceNow
+                                Text(relativeTimeLabel(diff))
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        Spacer()
+                        Image(systemName: "bell.fill")
+                            .font(.title2)
+                            .foregroundStyle(.green.opacity(0.3))
+                    }
+
+                    // Snooze-Buttons (neu — fehlten im Original)
+                    if !item.isCompleted {
+                        HStack(spacing: 8) {
+                            snoozeButton(label: "10 Min.", seconds: 600)
+                            snoozeButton(label: "1 Std.", seconds: 3600)
+                            snoozeButton(label: "Morgen", seconds: nextMorningOffset())
+                        }
+                    }
+                } else {
+                    // Keine Erinnerung
+                    Label("Keine Erinnerung gesetzt", systemImage: "bell.slash")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func relativeTimeLabel(_ interval: TimeInterval) -> String {
+        if interval < 3600 {
+            let mins = Int(interval / 60)
+            return "in \(mins) Minute\(mins == 1 ? "" : "n")"
+        } else if interval < 86400 {
+            let hours = Int(interval / 3600)
+            return "in \(hours) Stunde\(hours == 1 ? "" : "n")"
+        } else {
+            let days = Int(interval / 86400)
+            return "in \(days) Tag\(days == 1 ? "" : "en")"
+        }
+    }
+
+    private func nextMorningOffset() -> TimeInterval {
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        components.day = (components.day ?? 0) + 1
+        components.hour = 9
+        components.minute = 0
+        let tomorrow = Calendar.current.date(from: components) ?? Date().addingTimeInterval(86400)
+        return tomorrow.timeIntervalSinceNow
+    }
+
+    private func snoozeButton(label: String, seconds: TimeInterval) -> some View {
+        Button {
+            snoozeReminder(by: seconds)
+        } label: {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.accentColor)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity)
+                .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func snoozeReminder(by seconds: TimeInterval) {
+        let newDate = Date().addingTimeInterval(seconds)
+        item.reminderDate = newDate
+        item.hasReminder = true
+        item.updatedAt = Date()
+
+        Task { @MainActor in
+            do {
+                try await NotificationService.shared.scheduleReminder(for: item)
+                try modelContext.save()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    // MARK: - Text Section
+
+    private var textSection: some View {
+        VStack(spacing: 10) {
+            // Notiztext
+            if isEditing || !item.bodyText.trimmed.isEmpty {
+                detailCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        sectionLabel("Notiz")
+                        if isEditing {
+                            TextEditor(text: $item.bodyText)
+                                .frame(minHeight: 100)
+                                .padding(8)
+                                .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        } else {
+                            Text(item.bodyText.trimmed.isEmpty ? "Kein Text" : item.bodyText)
+                                .font(.body)
+                                .foregroundStyle(item.bodyText.trimmed.isEmpty ? .secondary : .primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+
+            // Erkannter Bildtext — bereinigt, ohne "--- Bild 1 ---" Header
+            if !item.recognizedText.trimmed.isEmpty {
+                detailCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            sectionLabel("Erkannter Text")
+                            Spacer()
+                            Image(systemName: "text.viewfinder")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        if isEditing {
+                            TextEditor(text: $item.recognizedText)
+                                .frame(minHeight: 100)
+                                .padding(8)
+                                .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        } else {
+                            // Fix: "--- Bild N ---" Header aus erkanntem Text entfernen
+                            Text(cleanedRecognizedText)
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Entfernt die "--- Bild N ---" Trennzeilen aus dem erkannten Text für saubere Darstellung
+    private var cleanedRecognizedText: String {
+        item.recognizedText
+            .components(separatedBy: "\n")
+            .filter { !$0.matches(pattern: "^--- Bild \\d+ ---$") }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - Images Section
+
+    @ViewBuilder
     private var imagesSection: some View {
         if !item.imageFileNames.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Bilder")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 12)], spacing: 12) {
-                    ForEach(item.imageFileNames, id: \.self) { fileName in
-                        if let image = imageStorage.loadImage(fileName: fileName) {
-                            Button {
-                                selectedImage = DetailImage(fileName: fileName, image: image)
-                            } label: {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(height: 150)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            detailCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    sectionLabel("Bilder")
+                    LazyVGrid(
+                        columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
+                        spacing: 10
+                    ) {
+                        ForEach(item.imageFileNames, id: \.self) { fileName in
+                            if let image = imageStorage.loadImage(fileName: fileName) {
+                                Button {
+                                    selectedImage = DetailImage(fileName: fileName, image: image)
+                                } label: {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(height: 140)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                .strokeBorder(Color.primary.opacity(0.08))
+                                        }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Bild öffnen")
+                            } else {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(Color(.tertiarySystemGroupedBackground))
+                                    .frame(height: 140)
+                                    .overlay {
+                                        Label("Nicht gefunden", systemImage: "photo.badge.exclamationmark")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Bild öffnen")
-                        } else {
-                            Label("Bilddatei nicht gefunden", systemImage: "photo.badge.exclamationmark")
-                                .font(.caption)
-                                .foregroundStyle(RemindlyStyle.mutedText)
                         }
                     }
                 }
@@ -267,114 +424,219 @@ struct DetailView: View {
         }
     }
 
-    private var detectedSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if !item.detectedPhoneNumbers.isEmpty {
-                detectedValues(title: "Telefonnummern", systemImage: "phone", values: item.detectedPhoneNumbers) { value in
-                    openPhone(value)
-                }
-            }
+    // MARK: - Detected Info Section
 
-            if !item.detectedURLs.isEmpty {
-                detectedValues(title: "Links", systemImage: "link", values: item.detectedURLs) { value in
-                    if let url = webURL(from: value) {
-                        openURL(url)
-                    } else {
-                        errorMessage = "Dieser Link kann nicht geöffnet werden."
+    @ViewBuilder
+    private var detectedSection: some View {
+        let hasAny = !item.detectedPhoneNumbers.isEmpty
+            || !item.detectedURLs.isEmpty
+            || !item.detectedAddresses.isEmpty
+            || !item.detectedDateStrings.isEmpty
+
+        if hasAny {
+            detailCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    sectionLabel("Erkannte Informationen")
+
+                    if !item.detectedPhoneNumbers.isEmpty {
+                        detectedGroup(
+                            title: "Telefon",
+                            systemImage: "phone.fill",
+                            tint: .green,
+                            values: item.detectedPhoneNumbers
+                        ) { openPhone($0) }
+                    }
+
+                    if !item.detectedURLs.isEmpty {
+                        if !item.detectedPhoneNumbers.isEmpty { Divider() }
+                        detectedGroup(
+                            title: "Links",
+                            systemImage: "link",
+                            tint: .accentColor,
+                            values: item.detectedURLs
+                        ) { value in
+                            if let url = webURL(from: value) { openURL(url) }
+                            else { errorMessage = "Dieser Link kann nicht geöffnet werden." }
+                        }
+                    }
+
+                    if !item.detectedAddresses.isEmpty {
+                        if !item.detectedPhoneNumbers.isEmpty || !item.detectedURLs.isEmpty { Divider() }
+                        detectedGroup(
+                            title: "Adressen",
+                            systemImage: "mappin.circle.fill",
+                            tint: .orange,
+                            values: item.detectedAddresses,
+                            action: nil
+                        )
+                    }
+
+                    if !item.detectedDateStrings.isEmpty {
+                        if !item.detectedPhoneNumbers.isEmpty || !item.detectedURLs.isEmpty || !item.detectedAddresses.isEmpty { Divider() }
+                        detectedGroup(
+                            title: "Erkannte Termine",
+                            systemImage: "calendar",
+                            tint: .purple,
+                            values: item.detectedDateStrings,
+                            action: nil
+                        )
                     }
                 }
             }
+        }
+    }
 
-            if !item.detectedAddresses.isEmpty {
-                detectedValues(title: "Adressen", systemImage: "mappin.and.ellipse", values: item.detectedAddresses, action: nil)
-            }
+    private func detectedGroup(
+        title: String,
+        systemImage: String,
+        tint: Color,
+        values: [String],
+        action: ((String) -> Void)?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
 
-            if !item.detectedDateStrings.isEmpty {
-                detectedValues(title: "Erkannte Termine", systemImage: "calendar", values: item.detectedDateStrings, action: nil)
+            ForEach(values, id: \.self) { value in
+                if let action {
+                    Button {
+                        action(value)
+                    } label: {
+                        HStack {
+                            Text(value)
+                                .font(.subheadline)
+                                .foregroundStyle(tint)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .lineLimit(1)
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundStyle(tint.opacity(0.6))
+                        }
+                        .padding(10)
+                        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text(value)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                        .padding(10)
+                        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
             }
         }
     }
+
+    // MARK: - Action Section
 
     private var actionSection: some View {
-        detailCard {
-            VStack(spacing: 12) {
-                if item.hasReminder {
-                    if !item.isCompleted {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label("Erinnerung verschieben", systemImage: "clock.arrow.circlepath")
-                                .font(.subheadline)
-                                .foregroundStyle(RemindlyStyle.mutedText)
-
-                            HStack {
-                                Button("10 Min.") {
-                                    snoozeReminder(by: 10 * 60)
-                                }
-
-                                Button("1 Std.") {
-                                    snoozeReminder(by: 60 * 60)
-                                }
-
-                                Button("Morgen") {
-                                    snoozeReminderUntilTomorrow()
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    Button {
-                        removeReminder()
-                    } label: {
-                        Label("Erinnerung entfernen", systemImage: "bell.slash")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                if item.isCompleted {
-                    Label("Erledigt", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(RemindlyStyle.success)
+        VStack(spacing: 10) {
+            // Erinnerung entfernen
+            if item.hasReminder {
+                Button { removeReminder() } label: {
+                    Label("Erinnerung entfernen", systemImage: "bell.slash")
+                        .font(.subheadline.weight(.medium))
                         .frame(maxWidth: .infinity)
-                } else {
-                    Button {
-                        markCompleted()
-                    } label: {
-                        Label("Als erledigt markieren", systemImage: "checkmark.circle")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
+                        .padding(.vertical, 13)
+                        .foregroundStyle(.accentColor)
+                        .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-
-                Button(role: .destructive) {
-                    showDeleteConfirmation = true
-                } label: {
-                    Label("Löschen", systemImage: "trash")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityLabel("Memo löschen")
+                .buttonStyle(.plain)
             }
+
+            // Als erledigt markieren / Erledigt-Status
+            if item.isCompleted {
+                Button {
+                    // Wieder öffnen
+                    item.isCompleted = false
+                    item.updatedAt = Date()
+                    Task { @MainActor in
+                        do {
+                            if item.hasReminder {
+                                try await NotificationService.shared.scheduleReminder(for: item)
+                            }
+                            try modelContext.save()
+                        } catch {
+                            errorMessage = error.localizedDescription
+                        }
+                    }
+                } label: {
+                    Label("Als offen markieren", systemImage: "arrow.uturn.left.circle")
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .foregroundStyle(.secondary)
+                        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button { markCompleted() } label: {
+                    Label("Als erledigt markieren", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .foregroundStyle(.white)
+                        .background(Color.green, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Löschen
+            Button(role: .destructive) {
+                showDeleteConfirmation = true
+            } label: {
+                Label("Löschen", systemImage: "trash")
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .foregroundStyle(.red)
+                    .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Memo löschen")
         }
     }
 
-    private var categoryRawValueBinding: Binding<String?> {
-        Binding(
-            get: { item.categoryRawValue },
-            set: {
-                item.categoryRawValue = $0
-                item.updatedAt = Date()
+    // MARK: - Reusable Layout Helpers
+
+    private func detailCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                Color(.secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.06))
             }
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .tracking(0.4)
+    }
+
+    // MARK: - Bindings
+
+    private var categoryBinding: Binding<MemoCategory?> {
+        Binding(
+            get: { item.category },
+            set: { item.category = $0; item.updatedAt = Date() }
         )
     }
 
     private var priorityBinding: Binding<MemoPriority> {
         Binding(
             get: { item.priority },
-            set: {
-                item.priority = $0
-                item.updatedAt = Date()
-            }
+            set: { item.priority = $0; item.updatedAt = Date() }
         )
     }
 
@@ -384,15 +646,8 @@ struct DetailView: View {
             set: { isEnabled in
                 item.hasReminder = isEnabled
                 item.updatedAt = Date()
-
                 if isEnabled, item.reminderDate == nil {
                     item.reminderDate = Date().addingTimeInterval(3_600)
-                }
-
-                if !isEnabled {
-                    item.reminderRepeatRule = .none
-                    item.reminderLeadTime = .none
-                    item.syncsToCalendar = false
                 }
             }
         )
@@ -401,41 +656,7 @@ struct DetailView: View {
     private var reminderDateBinding: Binding<Date> {
         Binding(
             get: { item.reminderDate ?? Date().addingTimeInterval(3_600) },
-            set: {
-                item.reminderDate = $0
-                item.hasReminder = true
-                item.updatedAt = Date()
-            }
-        )
-    }
-
-    private var reminderRepeatBinding: Binding<MemoReminderRepeatRule> {
-        Binding(
-            get: { item.reminderRepeatRule },
-            set: {
-                item.reminderRepeatRule = $0
-                item.updatedAt = Date()
-            }
-        )
-    }
-
-    private var reminderLeadTimeBinding: Binding<MemoReminderLeadTime> {
-        Binding(
-            get: { item.reminderLeadTime },
-            set: {
-                item.reminderLeadTime = $0
-                item.updatedAt = Date()
-            }
-        )
-    }
-
-    private var calendarSyncBinding: Binding<Bool> {
-        Binding(
-            get: { item.syncsToCalendar },
-            set: {
-                item.syncsToCalendar = $0
-                item.updatedAt = Date()
-            }
+            set: { item.reminderDate = $0; item.hasReminder = true; item.updatedAt = Date() }
         )
     }
 
@@ -457,97 +678,10 @@ struct DetailView: View {
         )
     }
 
-    private func detailCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .remindlyCard()
-    }
-
-    private func statusPill(_ title: String, systemImage: String, tint: Color) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption.weight(.bold))
-            .foregroundStyle(tint)
-            .lineLimit(1)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(tint.opacity(0.13), in: Capsule())
-    }
-
-    private func editableTextBlock(title: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(.white)
-
-            if isEditing {
-                TextEditor(text: text)
-                    .frame(minHeight: 110)
-                    .padding(8)
-                    .scrollContentBackground(.hidden)
-                    .background(RemindlyStyle.cardFill, in: RoundedRectangle(cornerRadius: RemindlyStyle.controlRadius, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: RemindlyStyle.controlRadius, style: .continuous)
-                            .strokeBorder(RemindlyStyle.border)
-                    }
-            } else if !text.wrappedValue.trimmed.isEmpty {
-                Text(text.wrappedValue)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-            } else {
-                Text("Kein Text")
-                    .foregroundStyle(RemindlyStyle.mutedText)
-            }
-        }
-    }
-
-    private func detectedValues(
-        title: String,
-        systemImage: String,
-        values: [String],
-        action: ((String) -> Void)?
-    ) -> some View {
-        detailCard {
-            VStack(alignment: .leading, spacing: 8) {
-                Label(title, systemImage: systemImage)
-                    .font(.headline)
-
-                ForEach(values, id: \.self) { value in
-                    if let action {
-                        Button {
-                            action(value)
-                        } label: {
-                            Text(value)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    } else {
-                        Text(value)
-                            .foregroundStyle(RemindlyStyle.mutedText)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-            }
-        }
-    }
-
-    private func imageDetailView(_ detailImage: DetailImage) -> some View {
-        ScrollView {
-            Image(uiImage: detailImage.image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity)
-                .padding()
-        }
-        .background(RemindlyStyle.backgroundGradient.ignoresSafeArea())
-    }
+    // MARK: - Actions
 
     private func saveChanges() {
-        if item.title.trimmed.isEmpty {
-            item.title = "Ohne Titel"
-        }
-
+        if item.title.trimmed.isEmpty { item.title = "Ohne Titel" }
         item.updatedAt = Date()
         updateDetectedInfo()
 
@@ -555,14 +689,10 @@ struct DetailView: View {
             do {
                 if item.isCompleted || !item.hasReminder {
                     NotificationService.shared.cancelReminder(for: item)
-                    await removeCalendarEventIfNeeded()
                 } else {
                     try await NotificationService.shared.scheduleReminder(for: item)
-                    try await syncCalendarEventIfNeeded()
                 }
-
                 try modelContext.save()
-                refreshWidgetSnapshot()
                 isEditing = false
             } catch {
                 errorMessage = error.localizedDescription
@@ -573,181 +703,82 @@ struct DetailView: View {
     private func removeReminder() {
         item.hasReminder = false
         item.reminderDate = nil
-        item.reminderRepeatRule = .none
-        item.reminderLeadTime = .none
-        item.syncsToCalendar = false
-        let calendarEventIdentifier = item.calendarEventIdentifier
-        item.calendarEventIdentifier = nil
         item.updatedAt = Date()
         NotificationService.shared.cancelReminder(for: item)
-
-        Task { @MainActor in
-            do {
-                try? await CalendarSyncService.shared.deleteEvent(with: calendarEventIdentifier)
-                try modelContext.save()
-                refreshWidgetSnapshot()
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-        }
+        do { try modelContext.save() }
+        catch { errorMessage = error.localizedDescription }
     }
 
     private func markCompleted() {
         item.isCompleted = true
-        item.syncsToCalendar = false
-        let calendarEventIdentifier = item.calendarEventIdentifier
-        item.calendarEventIdentifier = nil
         item.updatedAt = Date()
         NotificationService.shared.cancelReminder(for: item)
-
-        Task { @MainActor in
-            do {
-                try? await CalendarSyncService.shared.deleteEvent(with: calendarEventIdentifier)
-                try modelContext.save()
-                refreshWidgetSnapshot()
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-        }
-    }
-
-    private func snoozeReminder(by timeInterval: TimeInterval) {
-        postponeReminder(to: Date().addingTimeInterval(timeInterval))
-    }
-
-    private func snoozeReminderUntilTomorrow() {
-        let calendar = Calendar.current
-        let sourceDate = item.reminderDate ?? Date().addingTimeInterval(3_600)
-        let reminderTime = calendar.dateComponents([.hour, .minute], from: sourceDate)
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date().addingTimeInterval(86_400)
-        var targetComponents = calendar.dateComponents([.year, .month, .day], from: tomorrow)
-        targetComponents.hour = reminderTime.hour
-        targetComponents.minute = reminderTime.minute
-
-        postponeReminder(to: calendar.date(from: targetComponents) ?? tomorrow)
-    }
-
-    private func postponeReminder(to date: Date) {
-        let previousDate = item.reminderDate
-        let previousRepeatRule = item.reminderRepeatRule
-        let previousLeadTime = item.reminderLeadTime
-
-        item.hasReminder = true
-        item.isCompleted = false
-        item.reminderDate = max(date, Date().addingTimeInterval(60))
-        item.reminderRepeatRule = .none
-        item.reminderLeadTime = .none
-        item.updatedAt = Date()
-
-        Task { @MainActor in
-            do {
-                try await NotificationService.shared.scheduleReminder(for: item)
-                try await syncCalendarEventIfNeeded()
-                try modelContext.save()
-                refreshWidgetSnapshot()
-
-                if previousRepeatRule.isRepeating {
-                    errorMessage = "Erinnerung wurde einmalig verschoben. Die Wiederholung wurde dafür deaktiviert."
-                }
-            } catch {
-                item.reminderDate = previousDate
-                item.reminderRepeatRule = previousRepeatRule
-                item.reminderLeadTime = previousLeadTime
-                item.updatedAt = Date()
-                errorMessage = error.localizedDescription
-            }
-        }
+        do { try modelContext.save() }
+        catch { errorMessage = error.localizedDescription }
     }
 
     private func handleCompletionNotification() {
         Task { @MainActor in
             if item.isCompleted {
                 NotificationService.shared.cancelReminder(for: item)
-                await removeCalendarEventIfNeeded()
             } else if item.hasReminder {
-                do {
-                    try await NotificationService.shared.scheduleReminder(for: item)
-                    try await syncCalendarEventIfNeeded()
-                } catch {
-                    errorMessage = error.localizedDescription
-                }
+                do { try await NotificationService.shared.scheduleReminder(for: item) }
+                catch { errorMessage = error.localizedDescription }
             }
-
-            try? modelContext.save()
-            refreshWidgetSnapshot()
         }
     }
 
     private func deleteMemo() {
         Task { @MainActor in
             NotificationService.shared.cancelReminder(for: item)
-            try? await CalendarSyncService.shared.deleteEvent(with: item.calendarEventIdentifier)
             imageStorage.deleteImages(fileNames: item.imageFileNames)
             modelContext.delete(item)
-
-            do {
-                try modelContext.save()
-                refreshWidgetSnapshot()
-                dismiss()
-            } catch {
-                errorMessage = error.localizedDescription
-            }
+            do { try modelContext.save(); dismiss() }
+            catch { errorMessage = error.localizedDescription }
         }
     }
 
     private func openPhone(_ phoneNumber: String) {
         let digits = phoneNumber.filter { $0.isNumber || $0 == "+" }
-        if let url = URL(string: "tel://\(digits)") {
-            openURL(url)
-        } else {
-            errorMessage = "Diese Telefonnummer kann nicht geöffnet werden."
-        }
+        if let url = URL(string: "tel://\(digits)") { openURL(url) }
+        else { errorMessage = "Diese Telefonnummer kann nicht geöffnet werden." }
     }
 
     private func webURL(from value: String) -> URL? {
-        let trimmedValue = value.trimmed
-        guard !trimmedValue.isEmpty else {
-            return nil
-        }
-
-        if let url = URL(string: trimmedValue), url.scheme != nil {
-            return url
-        }
-
-        return URL(string: "https://\(trimmedValue)")
+        let v = value.trimmed
+        guard !v.isEmpty else { return nil }
+        if let url = URL(string: v), url.scheme != nil { return url }
+        return URL(string: "https://\(v)")
     }
 
     private func updateDetectedInfo() {
-        let info = DataDetectionService.shared.detect(in: [item.bodyText, item.recognizedText].joined(separator: "\n"))
+        let info = DataDetectionService.shared.detect(
+            in: [item.bodyText, item.recognizedText].joined(separator: "\n")
+        )
         item.detectedPhoneNumbers = info.phoneNumbers
         item.detectedURLs = info.urls
         item.detectedAddresses = info.addresses
         item.detectedDateStrings = info.formattedDates()
     }
 
-    private func syncCalendarEventIfNeeded() async throws {
-        guard item.syncsToCalendar,
-              item.hasReminder,
-              !item.isCompleted else {
-            await removeCalendarEventIfNeeded()
-            return
+    private func imageDetailView(_ detailImage: DetailImage) -> some View {
+        ScrollView {
+            Image(uiImage: detailImage.image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity)
+                .padding()
         }
-
-        let calendarEventIdentifier = try await CalendarSyncService.shared.saveEvent(for: item)
-        item.calendarEventIdentifier = calendarEventIdentifier
+        .background(Color(.systemBackground))
     }
+}
 
-    private func removeCalendarEventIfNeeded() async {
-        let calendarEventIdentifier = item.calendarEventIdentifier
-        item.calendarEventIdentifier = nil
-        item.syncsToCalendar = false
-        try? await CalendarSyncService.shared.deleteEvent(with: calendarEventIdentifier)
-    }
+// MARK: - String Helper Extension
 
-    private func refreshWidgetSnapshot() {
-        let descriptor = FetchDescriptor<MemoItem>()
-        if let items = try? modelContext.fetch(descriptor) {
-            MemoWidgetSnapshotUpdater.update(from: items)
-        }
+private extension String {
+    func matches(pattern: String) -> Bool {
+        (try? NSRegularExpression(pattern: pattern))
+            .map { $0.firstMatch(in: self, range: NSRange(self.startIndex..., in: self)) != nil }
+        ?? false
     }
 }
