@@ -23,47 +23,34 @@ struct PreviewView: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                previewHero
+        ScrollView {
+            VStack(spacing: 14) {
+                heroCard
+                contentCard
+                reminderCard
+                imagesCard
+                detectedInfoCard
+                organizationCard
+                actionCard
             }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 4, trailing: 20))
-
-            contentSection
-            reminderSection
-            photoQuestionSection
-            imagesSection
-            detectedInfoSection
-            organizationSection
-            saveSection
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .padding(.bottom, 32)
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .background(RemindlyStyle.backgroundGradient.ignoresSafeArea())
-        .tint(RemindlyStyle.accent)
-        .preferredColorScheme(.dark)
+        .background(Color(.systemGroupedBackground))
         .scrollDismissesKeyboard(.interactively)
         .onChange(of: selectedPhotoItems) { _, newItems in
-            Task {
-                await loadSelectedPhotos(newItems)
-            }
+            Task { await loadSelectedPhotos(newItems) }
         }
-        .onChange(of: viewModel.bodyText) { _, _ in
-            viewModel.textContentDidChange()
-        }
-        .onChange(of: viewModel.recognizedText) { _, _ in
-            viewModel.textContentDidChange()
-        }
+        .onChange(of: viewModel.bodyText) { _, _ in viewModel.textContentDidChange() }
+        .onChange(of: viewModel.recognizedText) { _, _ in viewModel.textContentDidChange() }
         .task {
             await viewModel.refreshNotificationStatus()
             await viewModel.prepareInitialImagesIfNeeded()
         }
         .sheet(item: $cameraSheet) { _ in
             CameraPickerView { image in
-                Task {
-                    await viewModel.addImage(image)
-                }
+                Task { await viewModel.addImage(image) }
             }
         }
         .confirmationDialog("Entwurf verwerfen?", isPresented: $showDiscardConfirmation, titleVisibility: .visible) {
@@ -74,339 +61,545 @@ struct PreviewView: View {
             Button("Abbrechen", role: .cancel) {}
         }
         .alert("Hinweis", isPresented: errorBinding) {
-            Button("OK", role: .cancel) {
-                viewModel.errorMessage = nil
-            }
+            Button("OK", role: .cancel) { viewModel.errorMessage = nil }
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
     }
 
-    private var previewHero: some View {
+    // MARK: - Hero Card
+
+    private var heroCard: some View {
         HStack(spacing: 14) {
-            Image(systemName: viewModel.hasReminder ? "bell.badge" : "doc.text")
-                .font(.title3.weight(.bold))
+            Image(systemName: viewModel.hasReminder ? "bell.badge.fill" : "doc.text.fill")
+                .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
-                .frame(width: 46, height: 46)
-                .background(viewModel.hasReminder ? RemindlyStyle.accentGradient : RemindlyStyle.warmGradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .frame(width: 48, height: 48)
+                .background(
+                    Color.accentColor.gradient,
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(viewModel.hasReminder ? "Neue Erinnerung" : "Neue Notiz")
-                    .font(.title2.weight(.black))
-                    .foregroundStyle(.white)
+                    .font(.title3.weight(.bold))
 
-                Text(viewModel.canSave ? "Bereit zum Speichern" : "Noch unvollständig")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(viewModel.canSave ? RemindlyStyle.success : RemindlyStyle.warning)
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(viewModel.canSave ? Color.green : Color.orange)
+                        .frame(width: 7, height: 7)
+                    Text(viewModel.canSave ? "Bereit zum Speichern" : "Noch unvollständig")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer()
         }
-        .padding(18)
-        .remindlyCard(radius: 30)
+        .detailCard()
     }
 
-    private var contentSection: some View {
-        Section("Inhalt") {
-            TextField("Titel", text: $viewModel.title)
-                .font(.title.weight(.bold))
+    // MARK: - Content Card
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Notiztext")
-                    .font(.caption)
+    private var contentCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionLabel("Inhalt")
+
+            // Titel
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Titel")
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-
-                TextEditor(text: $viewModel.bodyText)
-                    .frame(minHeight: 120)
-                    .scrollContentBackground(.hidden)
-                    .padding(8)
-                    .background(RemindlyStyle.elevatedFill, in: RoundedRectangle(cornerRadius: RemindlyStyle.controlRadius, style: .continuous))
+                TextField("Titel eingeben", text: $viewModel.title)
+                    .font(.headline)
+                    .padding(12)
+                    .background(
+                        Color(.tertiarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
             }
 
-            if !viewModel.recognizedText.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Erkannter Text aus Bildern")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            // Notiztext
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Notiztext")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $viewModel.bodyText)
+                    .frame(minHeight: 100)
+                    .padding(10)
+                    .scrollContentBackground(.hidden)
+                    .background(
+                        Color(.tertiarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+            }
 
+            // Erkannter Text (nur wenn vorhanden)
+            if !viewModel.recognizedText.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Erkannter Text")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Image(systemName: "text.viewfinder")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     TextEditor(text: $viewModel.recognizedText)
-                        .frame(minHeight: 110)
+                        .frame(minHeight: 90)
+                        .padding(10)
                         .scrollContentBackground(.hidden)
-                        .padding(8)
-                        .background(RemindlyStyle.elevatedFill, in: RoundedRectangle(cornerRadius: RemindlyStyle.controlRadius, style: .continuous))
+                        .background(
+                            Color(.tertiarySystemGroupedBackground),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
                 }
             }
-        }
-        .listRowBackground(formRowBackground)
-    }
 
-    private var photoQuestionSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Möchtest du ein Foto hinzufügen?")
-                    .font(.headline)
-
-                HStack(spacing: 10) {
-                    Button {
-                        Task {
-                            await openCamera()
-                        }
-                    } label: {
-                        Label("Foto aufnehmen", systemImage: "camera")
+            // Bilder hinzufügen (inline in Content Card)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Bilder")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if !viewModel.imageAttachments.isEmpty {
+                        Text("\(viewModel.imageAttachments.count)/3")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(!viewModel.canAddMoreImages)
+                }
 
-                    if viewModel.canAddMoreImages {
+                // Bildvorschau
+                if !viewModel.imageAttachments.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(viewModel.imageAttachments) { attachment in
+                                ZStack(alignment: .topTrailing) {
+                                    Image(uiImage: attachment.image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                .strokeBorder(Color.primary.opacity(0.08))
+                                        }
+
+                                    Button {
+                                        viewModel.removeImage(attachment)
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title3)
+                                            .symbolRenderingMode(.palette)
+                                            .foregroundStyle(.white, Color.black.opacity(0.6))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(4)
+                                    .accessibilityLabel("Bild entfernen")
+                                }
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+
+                // OCR Status
+                ocrStatusView
+
+                // Bild-Buttons
+                if viewModel.canAddMoreImages {
+                    HStack(spacing: 10) {
+                        Button {
+                            Task { await openCamera() }
+                        } label: {
+                            Label("Kamera", systemImage: "camera")
+                                .font(.subheadline.weight(.medium))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.bordered)
+
                         PhotosPicker(
                             selection: $selectedPhotoItems,
                             maxSelectionCount: viewModel.remainingImageSlots,
                             matching: .images
                         ) {
-                            Label("Aus Galerie wählen", systemImage: "photo")
+                            Label("Galerie", systemImage: "photo")
+                                .font(.subheadline.weight(.medium))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
                         }
                         .buttonStyle(.bordered)
-                    } else {
-                        Button {
-                            viewModel.errorMessage = "Du kannst maximal 3 Bilder pro Memo hinzufügen."
-                        } label: {
-                            Label("Aus Galerie wählen", systemImage: "photo")
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(true)
                     }
-                }
-
-                if let imageLimitMessage = viewModel.imageLimitMessage {
-                    Label(imageLimitMessage, systemImage: "info.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if viewModel.imageAttachments.isEmpty {
-                    Label("Noch kein Foto hinzugefügt.", systemImage: "photo")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Button {
-                    viewModel.didSkipPhotoQuestion = true
-                } label: {
-                    Label("Überspringen", systemImage: "forward")
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-
-                if viewModel.didSkipPhotoQuestion {
-                    Label("Kein Foto für diesen Eintrag", systemImage: "checkmark.circle")
+                } else {
+                    Label("Maximal 3 Bilder erreicht", systemImage: "info.circle")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 if viewModel.isProcessingImage {
-                    ProgressView("Bild wird vorbereitet")
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.8)
+                        Text("Bild wird vorbereitet …")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-
-                ocrStatusView
             }
-            .padding(.vertical, 4)
         }
-        .listRowBackground(formRowBackground)
+        .detailCard()
     }
 
-    private var reminderSection: some View {
-        Section("Erinnerung") {
-            if let suggestedDate = viewModel.suggestedReminderDate, !viewModel.hasReminder {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Soll daraus eine Erinnerung erstellt werden?")
-                        .font(.headline)
+    // MARK: - Reminder Card
 
-                    Text(suggestedDate.formatted(date: .abbreviated, time: .shortened))
-                        .foregroundStyle(.secondary)
+    private var reminderCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionLabel("Erinnerung")
+
+            // Vorgeschlagenes Datum
+            if let suggestedDate = viewModel.suggestedReminderDate, !viewModel.hasReminder {
+                HStack(spacing: 12) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.title3)
+                        .foregroundStyle(.accentColor)
+                        .frame(width: 36)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Erkannter Termin")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(suggestedDate.formatted(date: .abbreviated, time: .shortened))
+                            .font(.subheadline.weight(.medium))
+                    }
+
+                    Spacer()
 
                     Button {
                         viewModel.acceptSuggestedReminder()
                     } label: {
-                        Label("Datum übernehmen", systemImage: "bell.badge")
+                        Text("Übernehmen")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.accentColor)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.accentColor.opacity(0.1), in: Capsule())
                     }
+                    .buttonStyle(.plain)
                 }
-                .padding(.vertical, 4)
+                .padding(12)
+                .background(Color.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.accentColor.opacity(0.2))
+                }
             }
 
-            Toggle("Als Erinnerung speichern", isOn: $viewModel.hasReminder)
+            // Toggle
+            Toggle(isOn: $viewModel.hasReminder) {
+                Label("Als Erinnerung speichern", systemImage: "bell")
+                    .font(.subheadline.weight(.medium))
+            }
+            .tint(.accentColor)
 
             if viewModel.hasReminder {
+                Divider()
+
+                // DatePicker
                 DatePicker(
                     "Datum und Uhrzeit",
                     selection: reminderDateBinding,
                     in: Date()...,
                     displayedComponents: [.date, .hourAndMinute]
                 )
+                .font(.subheadline)
 
+                // Wiederholen
                 Picker("Wiederholen", selection: $viewModel.reminderRepeatRule) {
-                    ForEach(MemoReminderRepeatRule.allCases) { repeatRule in
-                        Label(repeatRule.displayName, systemImage: repeatRule.systemImage)
-                            .tag(repeatRule)
+                    ForEach(MemoReminderRepeatRule.allCases) { rule in
+                        Label(rule.displayName, systemImage: rule.systemImage).tag(rule)
                     }
                 }
+                .font(.subheadline)
 
-                Picker("Vorher erinnern", selection: $viewModel.reminderLeadTime) {
+                // Vorab erinnern
+                Picker("Vorab erinnern", selection: $viewModel.reminderLeadTime) {
                     ForEach(MemoReminderLeadTime.allCases) { leadTime in
-                        Label(leadTime.displayName, systemImage: leadTime.systemImage)
-                            .tag(leadTime)
+                        Label(leadTime.displayName, systemImage: leadTime.systemImage).tag(leadTime)
                     }
                 }
+                .font(.subheadline)
 
-                Toggle("Mit iOS-Kalender synchronisieren", isOn: $viewModel.syncsToCalendar)
+                // Kalender
+                Toggle(isOn: $viewModel.syncsToCalendar) {
+                    Label("Mit iOS-Kalender synchronisieren", systemImage: "calendar")
+                        .font(.subheadline)
+                }
+                .tint(.accentColor)
 
                 if viewModel.syncsToCalendar {
-                    Label("RemindlyAi erstellt dafür einen Termin im iOS-Kalender und aktualisiert ihn bei Änderungen.", systemImage: "calendar.badge.plus")
+                    Label("Ein Termin wird im iOS-Kalender erstellt und bei Änderungen aktualisiert.", systemImage: "calendar.badge.plus")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
-                if let reminderValidationMessage = viewModel.reminderValidationMessage {
-                    Label(reminderValidationMessage, systemImage: "exclamationmark.triangle")
+                // Validation
+                if let msg = viewModel.reminderValidationMessage {
+                    Label(msg, systemImage: "exclamationmark.triangle")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.orange)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Label("Benachrichtigungen", systemImage: "bell")
-                        Spacer()
-                        Text(viewModel.notificationStatusText)
-                            .foregroundStyle(.secondary)
-                    }
+                // Benachrichtigungs-Status
+                Divider()
 
-                    if viewModel.notificationStatus != .authorized {
-                        Text("RemindlyAi plant Erinnerungen lokal auf diesem iPhone. Dafür müssen Benachrichtigungen erlaubt sein.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if viewModel.shouldShowNotificationPermissionButton {
-                        Button {
-                            Task {
-                                await viewModel.requestNotificationAuthorization()
-                            }
-                        } label: {
-                            Label("Benachrichtigungen erlauben", systemImage: "bell.badge")
-                        }
-                    }
+                HStack {
+                    Label("Benachrichtigungen", systemImage: "bell")
+                        .font(.subheadline)
+                    Spacer()
+                    Text(viewModel.notificationStatusText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .padding(.vertical, 4)
+
+                if viewModel.shouldShowNotificationPermissionButton {
+                    Button {
+                        Task { await viewModel.requestNotificationAuthorization() }
+                    } label: {
+                        Label("Benachrichtigungen erlauben", systemImage: "bell.badge")
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .foregroundStyle(.accentColor)
+                            .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
-        .listRowBackground(formRowBackground)
+        .detailCard()
     }
 
-    private var organizationSection: some View {
-        Section("Einordnung") {
-            CategoryPickerView(selectionRawValue: $viewModel.categoryRawValue, categories: categories)
-            PriorityPickerView(selection: $viewModel.priority)
-        }
-        .listRowBackground(formRowBackground)
-    }
+    // MARK: - Detected Info Card
 
     @ViewBuilder
-    private var detectedInfoSection: some View {
-        Section("Erkannte Informationen") {
-            if viewModel.detectedInfo.isEmpty {
-                Label("Noch keine erkannten Informationen.", systemImage: "text.magnifyingglass")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } else {
+    private var detectedInfoCard: some View {
+        if !viewModel.detectedInfo.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                sectionLabel("Erkannte Informationen")
+
                 if !viewModel.detectedDateSuggestions.isEmpty {
-                    detectedDateRows(viewModel.detectedDateSuggestions)
+                    detectedGroup(
+                        title: "Erkannte Termine",
+                        systemImage: "calendar",
+                        tint: .purple
+                    ) {
+                        ForEach(viewModel.detectedDateSuggestions) { suggestion in
+                            let index = viewModel.detectedDateSuggestions.firstIndex(of: suggestion) ?? 0
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(suggestion.displayText)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                if suggestion.isFuture {
+                                    Button {
+                                        viewModel.useDetectedDate(suggestion.date)
+                                    } label: {
+                                        Label("Als Erinnerung verwenden", systemImage: "bell.badge")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.accentColor)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background(Color.accentColor.opacity(0.1), in: Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 if !viewModel.detectedInfo.phoneNumbers.isEmpty {
-                    editableDetectedRows(title: "Telefonnummern", systemImage: "phone", values: $viewModel.detectedInfo.phoneNumbers)
+                    if !viewModel.detectedDateSuggestions.isEmpty { Divider() }
+                    detectedGroup(title: "Telefon", systemImage: "phone.fill", tint: .green) {
+                        ForEach(viewModel.detectedInfo.phoneNumbers, id: \.self) { number in
+                            detectedRow(value: number, tint: .green)
+                        }
+                    }
                 }
 
                 if !viewModel.detectedInfo.urls.isEmpty {
-                    editableDetectedRows(title: "Links", systemImage: "link", values: $viewModel.detectedInfo.urls)
+                    Divider()
+                    detectedGroup(title: "Links", systemImage: "link", tint: .accentColor) {
+                        ForEach(viewModel.detectedInfo.urls, id: \.self) { url in
+                            detectedRow(value: url, tint: .accentColor)
+                        }
+                    }
                 }
 
                 if !viewModel.detectedInfo.addresses.isEmpty {
-                    editableDetectedRows(title: "Adressen", systemImage: "mappin.and.ellipse", values: $viewModel.detectedInfo.addresses)
-                }
-            }
-        }
-        .listRowBackground(formRowBackground)
-    }
-
-    @ViewBuilder
-    private var imagesSection: some View {
-        if !viewModel.imageAttachments.isEmpty {
-            Section("Bilder") {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(viewModel.imageAttachments) { attachment in
-                            ZStack(alignment: .topTrailing) {
-                                Image(uiImage: attachment.image)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 112, height: 112)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                                Button {
-                                    viewModel.removeImage(attachment)
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.title3)
-                                        .symbolRenderingMode(.palette)
-                                        .foregroundStyle(.white, .black.opacity(0.65))
-                                }
-                                .buttonStyle(.plain)
-                                .padding(6)
-                                .accessibilityLabel("Bild entfernen")
-                            }
+                    Divider()
+                    detectedGroup(title: "Adressen", systemImage: "mappin.circle.fill", tint: .orange) {
+                        ForEach(viewModel.detectedInfo.addresses, id: \.self) { address in
+                            Text(address)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
                         }
                     }
-                    .padding(.vertical, 4)
                 }
             }
-            .listRowBackground(formRowBackground)
+            .detailCard()
         }
     }
 
-    private var saveSection: some View {
-        Section {
+    // MARK: - Organization Card
+
+    private var organizationCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionLabel("Einordnung")
+            CategoryPickerView(selectionRawValue: $viewModel.categoryRawValue, categories: categories)
+            Divider()
+            PriorityPickerView(selection: $viewModel.priority)
+        }
+        .detailCard()
+    }
+
+    // MARK: - Images Card (separates Bild-Preview wenn vorhanden)
+
+    @ViewBuilder
+    private var imagesCard: some View {
+        EmptyView() // Bilder sind jetzt in contentCard integriert
+    }
+
+    // MARK: - Action Card
+
+    private var actionCard: some View {
+        VStack(spacing: 10) {
+            // Primär: Speichern
             Button {
                 save(forceNormalNote: false)
             } label: {
-                Label(viewModel.hasReminder ? "Als Erinnerung speichern" : "Notiz speichern", systemImage: viewModel.hasReminder ? "bell" : "note.text")
+                HStack {
+                    if viewModel.isSaving {
+                        ProgressView().scaleEffect(0.8).tint(.white)
+                    }
+                    Label(
+                        viewModel.hasReminder ? "Als Erinnerung speichern" : "Notiz speichern",
+                        systemImage: viewModel.hasReminder ? "bell.fill" : "note.text"
+                    )
+                    .font(.headline)
                     .frame(maxWidth: .infinity)
+                }
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.large)
             .disabled(!viewModel.canSave)
 
+            // Sekundär: Ohne Erinnerung speichern
             if viewModel.hasReminder {
                 Button {
                     save(forceNormalNote: true)
                 } label: {
                     Label("Ohne Erinnerung speichern", systemImage: "bell.slash")
+                        .font(.subheadline.weight(.medium))
                         .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .foregroundStyle(.accentColor)
+                        .background(
+                            Color.accentColor.opacity(0.1),
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
                 .disabled(!viewModel.canSave)
             }
 
+            // Destruktiv: Verwerfen
             Button(role: .destructive) {
                 showDiscardConfirmation = true
             } label: {
                 Label("Verwerfen", systemImage: "trash")
+                    .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .foregroundStyle(.red)
+                    .background(
+                        Color.red.opacity(0.1),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
             }
+            .buttonStyle(.plain)
         }
-        .listRowBackground(Color.clear)
     }
 
-    private var formRowBackground: Color {
-        RemindlyStyle.cardFill
+    // MARK: - Helpers
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .tracking(0.4)
     }
+
+    private func detectedGroup<Content: View>(
+        title: String,
+        systemImage: String,
+        tint: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+            content()
+        }
+    }
+
+    private func detectedRow(value: String, tint: Color) -> some View {
+        HStack {
+            Text(value)
+                .font(.subheadline)
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "arrow.up.right")
+                .font(.caption)
+                .foregroundStyle(tint.opacity(0.6))
+        }
+        .padding(10)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var ocrStatusView: some View {
+        switch viewModel.ocrState {
+        case .idle:
+            EmptyView()
+        case .processing:
+            HStack(spacing: 8) {
+                ProgressView().scaleEffect(0.8)
+                Text("Text wird erkannt …")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        case .completed:
+            Label("Text aus Bild erkannt", systemImage: "text.viewfinder")
+                .font(.caption)
+                .foregroundStyle(.green)
+        case .noTextFound:
+            Label("Kein Text im Bild gefunden", systemImage: "text.badge.xmark")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .failed(let message):
+            Label(message, systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.orange)
+        }
+    }
+
+    // MARK: - Bindings
 
     private var reminderDateBinding: Binding<Date> {
         Binding(
@@ -422,165 +615,52 @@ struct PreviewView: View {
         )
     }
 
-    @ViewBuilder
-    private var ocrStatusView: some View {
-        switch viewModel.ocrState {
-        case .idle:
-            EmptyView()
-        case .processing:
-            ProgressView("Text wird aus Bild erkannt...")
-                .font(.caption)
-        case .completed:
-            Label("Text aus Bild erkannt.", systemImage: "text.viewfinder")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        case .noTextFound:
-            Label("Kein Text im Bild erkannt.", systemImage: "text.badge.xmark")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        case .failed(let message):
-            Label(message, systemImage: "exclamationmark.triangle")
-                .font(.caption)
-                .foregroundStyle(.orange)
-        }
-    }
-
-    private func detectedDateRows(_ suggestions: [DetectedDateSuggestion]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Erkannte Termine", systemImage: "calendar")
-                .font(.subheadline.weight(.semibold))
-
-            ForEach(suggestions) { suggestion in
-                let index = suggestions.firstIndex(of: suggestion) ?? 0
-
-                VStack(alignment: .leading, spacing: 6) {
-                    TextField("Erkannter Termin", text: detectedDateStringBinding(at: index))
-                        .textInputAutocapitalization(.sentences)
-
-                    if suggestion.isFuture {
-                        Button {
-                            viewModel.useDetectedDate(suggestion.date)
-                        } label: {
-                            Label("Als Erinnerung verwenden", systemImage: "bell.badge")
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-            }
-        }
-    }
-
-    private func editableDetectedRows(title: String, systemImage: String, values: Binding<[String]>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: systemImage)
-                .font(.subheadline.weight(.semibold))
-
-            ForEach(values.wrappedValue.indices, id: \.self) { index in
-                TextField(title, text: detectedStringBinding(values, at: index))
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(title == "Telefonnummern" ? .phonePad : .default)
-            }
-        }
-    }
-
-    private func detectedDateStringBinding(at index: Int) -> Binding<String> {
-        Binding(
-            get: {
-                viewModel.detectedInfo.dateStrings[safe: index] ?? viewModel.detectedDateSuggestions[safe: index]?.displayText ?? ""
-            },
-            set: { newValue in
-                guard viewModel.detectedInfo.dateStrings.indices.contains(index) else {
-                    return
-                }
-
-                viewModel.detectedInfo.dateStrings[index] = newValue
-            }
-        )
-    }
-
-    private func detectedStringBinding(_ values: Binding<[String]>, at index: Int) -> Binding<String> {
-        Binding(
-            get: {
-                values.wrappedValue[safe: index] ?? ""
-            },
-            set: { newValue in
-                guard values.wrappedValue.indices.contains(index) else {
-                    return
-                }
-
-                values.wrappedValue[index] = newValue
-            }
-        )
-    }
-
-    private func detectedRows(title: String, systemImage: String, values: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: systemImage)
-                .font(.subheadline.weight(.semibold))
-
-            ForEach(values, id: \.self) { value in
-                Text(value)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-        }
-    }
+    // MARK: - Actions
 
     private func openCamera() async {
         guard viewModel.canAddMoreImages else {
             viewModel.errorMessage = "Du kannst maximal 3 Bilder pro Memo hinzufügen."
             return
         }
-
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            viewModel.errorMessage = "Kamera ist auf diesem Gerät nicht verfügbar."
+            viewModel.errorMessage = "Kamera nicht verfügbar."
             return
         }
-
         let status = AVCaptureDevice.authorizationStatus(for: .video)
         if status == .notDetermined {
             let granted = await AVCaptureDevice.requestAccess(for: .video)
             guard granted else {
-                viewModel.errorMessage = "Die Kameraberechtigung wurde nicht erteilt."
+                viewModel.errorMessage = "Kameraberechtigung nicht erteilt."
                 return
             }
         } else if status == .denied || status == .restricted {
-            viewModel.errorMessage = "Die Kameraberechtigung wurde nicht erteilt."
+            viewModel.errorMessage = "Kameraberechtigung verweigert. Bitte in Einstellungen aktivieren."
             return
         }
-
         cameraSheet = CameraSheet()
     }
 
     private func loadSelectedPhotos(_ items: [PhotosPickerItem]) async {
         guard !items.isEmpty else { return }
-
         guard viewModel.canAddMoreImages else {
-            viewModel.errorMessage = "Du kannst maximal 3 Bilder pro Memo hinzufügen."
+            viewModel.errorMessage = "Maximal 3 Bilder pro Memo."
             selectedPhotoItems = []
             return
         }
-
-        let itemsToLoad = Array(items.prefix(viewModel.remainingImageSlots))
-
-        for item in itemsToLoad {
+        let toLoad = Array(items.prefix(viewModel.remainingImageSlots))
+        for item in toLoad {
             do {
                 if let data = try await item.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
                     await viewModel.addImage(image)
-                } else {
-                    viewModel.errorMessage = "Das ausgewählte Bild konnte nicht geladen werden."
                 }
             } catch {
-                viewModel.errorMessage = "Das ausgewählte Bild konnte nicht geladen werden: \(error.localizedDescription)"
+                viewModel.errorMessage = "Bild konnte nicht geladen werden."
             }
         }
-
-        if items.count > itemsToLoad.count {
-            viewModel.errorMessage = "Es wurden nur die ersten \(itemsToLoad.count) Bilder übernommen. Maximal 3 Bilder pro Memo sind erlaubt."
+        if items.count > toLoad.count {
+            viewModel.errorMessage = "Nur \(toLoad.count) Bild(er) übernommen. Maximum: 3."
         }
-
         selectedPhotoItems = []
     }
 
@@ -593,6 +673,24 @@ struct PreviewView: View {
                 viewModel.errorMessage = error.localizedDescription
             }
         }
+    }
+}
+
+// MARK: - View Extension für Card-Style
+
+private extension View {
+    func detailCard() -> some View {
+        self
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                Color(.secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.06))
+            }
     }
 }
 
