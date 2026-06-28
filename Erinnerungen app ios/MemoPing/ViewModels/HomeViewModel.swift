@@ -35,6 +35,24 @@ final class HomeViewModel: ObservableObject {
     @Published var searchText = ""
     @Published var selectedCategoryRawValue: String?
 
+    /// Compatibility bridge for views that still use the legacy enum-based category API.
+    /// New code should prefer `selectedCategoryRawValue` so custom categories also work.
+    var selectedCategory: MemoCategory? {
+        get {
+            guard let selectedCategoryRawValue else { return nil }
+            return MemoCategory(rawValue: selectedCategoryRawValue)
+        }
+        set {
+            selectedCategoryRawValue = newValue?.rawValue
+        }
+    }
+
+    /// Compatibility overload for the current HomeView. It preserves the legacy default
+    /// categories while the view is migrated to query `MemoCategoryItem` directly.
+    func sectionGroups(from items: [MemoItem]) -> [MemoSectionGroup] {
+        sectionGroups(from: items, categories: Self.legacyCategories)
+    }
+
     func sectionGroups(from items: [MemoItem], categories: [MemoCategoryItem]) -> [MemoSectionGroup] {
         let filteredItems = filtered(items, categories: categories)
         let calendar = Calendar.current
@@ -109,6 +127,36 @@ final class HomeViewModel: ObservableObject {
             case (.none, .none):
                 return lhs.createdAt > rhs.createdAt
             }
+        }
+    }
+
+    private static var legacyCategories: [MemoCategoryItem] {
+        MemoCategory.allCases.enumerated().map { index, category in
+            MemoCategoryItem(
+                id: category.rawValue,
+                name: category.displayName,
+                systemImage: category.systemImage,
+                tintRawValue: category.legacyTintRawValue,
+                isDefault: true,
+                sortOrder: index
+            )
+        }
+    }
+}
+
+private extension MemoCategory {
+    var legacyTintRawValue: String {
+        switch self {
+        case .uni:
+            return "indigo"
+        case .privat:
+            return "green"
+        case .wichtig:
+            return "orange"
+        case .dokumente:
+            return "teal"
+        case .ideen:
+            return "yellow"
         }
     }
 }
