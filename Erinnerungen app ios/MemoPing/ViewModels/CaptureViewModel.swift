@@ -21,6 +21,27 @@ final class CaptureViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var sourceType: MemoSourceType = .text
 
+    /// Compatibility bridge for CaptureView code that still addresses plain UIImages.
+    /// Existing attachment metadata is preserved when the array is mutated, for example
+    /// through `images.remove(at:)`.
+    var images: [UIImage] {
+        get {
+            imageAttachments.map(\.image)
+        }
+        set {
+            let currentAttachments = imageAttachments
+            imageAttachments = newValue.map { image in
+                currentAttachments.first(where: { $0.image === image })
+                    ?? CaptureImageAttachment(image: image)
+            }
+            rebuildRecognizedText()
+
+            if imageAttachments.isEmpty, inputText.trimmed.isEmpty {
+                sourceType = .text
+            }
+        }
+    }
+
     private let speechService = SpeechRecognitionService()
     private let ocrService = OCRService.shared
     private let dataDetectionService = DataDetectionService.shared
