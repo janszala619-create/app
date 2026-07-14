@@ -355,30 +355,10 @@ struct HomeView: View {
     }
 
     private func toggleCompleted(_ item: MemoItem) {
-        let previous = item.isCompleted
-        item.isCompleted.toggle()
-        item.updatedAt = Date()
-
         Task { @MainActor in
             do {
-                if item.isCompleted {
-                    NotificationService.shared.cancelReminder(for: item)
-
-                    // Auch den synchronisierten Kalendertermin beenden,
-                    // sonst laufen dessen Alarme und Wiederholungen endlos weiter.
-                    if let eventIdentifier = item.calendarEventIdentifier {
-                        try? await CalendarSyncService.shared.deleteEvent(with: eventIdentifier)
-                        item.calendarEventIdentifier = nil
-                        item.syncsToCalendar = false
-                    }
-                } else if item.hasReminder {
-                    try await NotificationService.shared.scheduleReminder(for: item)
-                }
-                try modelContext.save()
-                MemoWidgetSnapshotUpdater.refresh(in: modelContext)
+                try await MemoActionService.shared.setCompleted(!item.isCompleted, for: item, in: modelContext)
             } catch {
-                item.isCompleted = previous
-                item.updatedAt = Date()
                 errorMessage = error.localizedDescription
             }
         }
@@ -386,17 +366,8 @@ struct HomeView: View {
 
     private func delete(_ item: MemoItem) {
         Task { @MainActor in
-            NotificationService.shared.cancelReminder(for: item)
-
-            if let eventIdentifier = item.calendarEventIdentifier {
-                try? await CalendarSyncService.shared.deleteEvent(with: eventIdentifier)
-            }
-
-            imageStorage.deleteImages(fileNames: item.imageFileNames)
-            modelContext.delete(item)
             do {
-                try modelContext.save()
-                MemoWidgetSnapshotUpdater.refresh(in: modelContext)
+                try await MemoActionService.shared.delete(item, in: modelContext)
             } catch {
                 errorMessage = error.localizedDescription
             }

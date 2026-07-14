@@ -151,15 +151,7 @@ enum MemoIntentDataProvider {
             return "Diese Erinnerung wurde nicht gefunden."
         }
 
-        item.isCompleted = true
-        item.syncsToCalendar = false
-        let calendarEventIdentifier = item.calendarEventIdentifier
-        item.calendarEventIdentifier = nil
-        item.updatedAt = Date()
-        NotificationService.shared.cancelReminder(for: item)
-        try? await CalendarSyncService.shared.deleteEvent(with: calendarEventIdentifier)
-        try context.save()
-        MemoWidgetSnapshotUpdater.update(from: items)
+        try await MemoActionService.shared.setCompleted(true, for: item, in: context)
 
         return "Erledigt markiert: \(item.title)"
     }
