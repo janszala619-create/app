@@ -1,4 +1,3 @@
-import AVFoundation
 import PhotosUI
 import SwiftUI
 
@@ -322,53 +321,25 @@ struct CaptureView: View {
 
     private func openCamera() async {
         guard viewModel.canAddMoreImages else {
-            viewModel.errorMessage = "Du kannst maximal 3 Bilder pro Memo hinzufügen."
+            viewModel.errorMessage = ImageAttachmentPicker.limitMessage
             return
         }
-
-        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            viewModel.errorMessage = "Kamera ist auf diesem Gerät nicht verfügbar."
+        if let accessError = await ImageAttachmentPicker.cameraAccessError() {
+            viewModel.errorMessage = accessError
             return
         }
-
-        let status = AVCaptureDevice.authorizationStatus(for: .video)
-        if status == .notDetermined {
-            let granted = await AVCaptureDevice.requestAccess(for: .video)
-            guard granted else {
-                viewModel.errorMessage = "Die Kameraberechtigung wurde nicht erteilt."
-                return
-            }
-        } else if status == .denied || status == .restricted {
-            viewModel.errorMessage = "Die Kameraberechtigung wurde nicht erteilt. Bitte in den Einstellungen aktivieren."
-            return
-        }
-
         cameraSheet = CameraSheet()
     }
 
     private func loadSelectedPhotos(_ items: [PhotosPickerItem]) async {
         guard !items.isEmpty else { return }
 
-        let slotsLeft = viewModel.remainingImageSlots
-        guard slotsLeft > 0 else {
-            viewModel.errorMessage = "Du kannst maximal 3 Bilder pro Memo hinzufügen."
-            selectedPhotoItems = []
-            return
-        }
-
-        for item in items.prefix(slotsLeft) {
-            do {
-                if let data = try await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    await viewModel.addImage(image)
-                }
-            } catch {
-                viewModel.errorMessage = "Bild konnte nicht geladen werden."
-            }
-        }
-
-        if items.count > slotsLeft {
-            viewModel.errorMessage = "Es wurden nur \(slotsLeft) Bilder übernommen. Maximal 3 pro Memo."
+        if let message = await ImageAttachmentPicker.loadPhotos(
+            items,
+            slotsLeft: viewModel.remainingImageSlots,
+            addImage: { await viewModel.addImage($0) }
+        ) {
+            viewModel.errorMessage = message
         }
 
         selectedPhotoItems = []

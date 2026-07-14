@@ -86,7 +86,6 @@ final class PreviewViewModel: ObservableObject {
     @Published var priority: MemoPriority = .normal
     @Published private(set) var imageAttachments: [PreviewImageAttachment] = []
     @Published var detectedInfo: DetectedInfo
-    @Published var didSkipPhotoQuestion = false
     @Published var isProcessingImage = false
     @Published var isSaving = false
     @Published private(set) var ocrState: OCRState = .idle
@@ -182,10 +181,6 @@ final class PreviewViewModel: ObservableObject {
         remainingImageSlots > 0
     }
 
-    var imageLimitMessage: String? {
-        canAddMoreImages ? nil : "Maximal 3 Bilder erreicht."
-    }
-
     var canSave: Bool {
         !isSaving && !isProcessingImage && !ocrState.isProcessing
     }
@@ -261,7 +256,6 @@ final class PreviewViewModel: ObservableObject {
         }
 
         sourceType = bodyText.trimmed.isEmpty && recognizedText.trimmed.isEmpty ? .image : .mixed
-        didSkipPhotoQuestion = false
     }
 
     private func adoptPrecomputedText(_ text: String, for fileName: String) {
@@ -393,7 +387,9 @@ final class PreviewViewModel: ObservableObject {
         }
     }
 
-    private func appendRecognizedText(_ text: String) {
+    /// Nach neuem OCR-Text: erkannte Infos neu berechnen und einen dabei
+    /// gefundenen Termin als Erinnerungsvorschlag übernehmen.
+    private func refreshDetectedInfoAfterOCR() {
         recalculateDetectedInfo()
 
         if reminderDate == nil {
@@ -446,7 +442,7 @@ final class PreviewViewModel: ObservableObject {
             noTextOCRFileNames.remove(attachment.fileName)
             recognizedTextsByFileName[attachment.fileName] = text
             rebuildRecognizedTextFromImages()
-            appendRecognizedText(text)
+            refreshDetectedInfoAfterOCR()
         } catch is CancellationError {
             return
         } catch OCRServiceError.noTextFound {
@@ -536,11 +532,5 @@ final class PreviewViewModel: ObservableObject {
             .joined(separator: " ")
 
         return words.isEmpty ? "Neue Notiz" : words
-    }
-}
-
-private extension Array {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }

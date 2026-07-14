@@ -1,4 +1,3 @@
-import AVFoundation
 import PhotosUI
 import SwiftData
 import SwiftUI
@@ -28,7 +27,6 @@ struct PreviewView: View {
                 heroCard
                 contentCard
                 reminderCard
-                imagesCard
                 detectedInfoCard
                 organizationCard
                 actionCard
@@ -396,7 +394,6 @@ struct PreviewView: View {
                         tint: .purple
                     ) {
                         ForEach(viewModel.detectedDateSuggestions) { suggestion in
-                            let index = viewModel.detectedDateSuggestions.firstIndex(of: suggestion) ?? 0
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(suggestion.displayText)
                                     .font(.subheadline)
@@ -463,13 +460,6 @@ struct PreviewView: View {
             PriorityPickerView(selection: $viewModel.priority)
         }
         .detailCard()
-    }
-
-    // MARK: - Images Card (separates Bild-Preview wenn vorhanden)
-
-    @ViewBuilder
-    private var imagesCard: some View {
-        EmptyView() // Bilder sind jetzt in contentCard integriert
     }
 
     // MARK: - Action Card
@@ -619,22 +609,11 @@ struct PreviewView: View {
 
     private func openCamera() async {
         guard viewModel.canAddMoreImages else {
-            viewModel.errorMessage = "Du kannst maximal 3 Bilder pro Memo hinzufügen."
+            viewModel.errorMessage = ImageAttachmentPicker.limitMessage
             return
         }
-        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            viewModel.errorMessage = "Kamera nicht verfügbar."
-            return
-        }
-        let status = AVCaptureDevice.authorizationStatus(for: .video)
-        if status == .notDetermined {
-            let granted = await AVCaptureDevice.requestAccess(for: .video)
-            guard granted else {
-                viewModel.errorMessage = "Kameraberechtigung nicht erteilt."
-                return
-            }
-        } else if status == .denied || status == .restricted {
-            viewModel.errorMessage = "Kameraberechtigung verweigert. Bitte in Einstellungen aktivieren."
+        if let accessError = await ImageAttachmentPicker.cameraAccessError() {
+            viewModel.errorMessage = accessError
             return
         }
         cameraSheet = CameraSheet()
@@ -642,25 +621,15 @@ struct PreviewView: View {
 
     private func loadSelectedPhotos(_ items: [PhotosPickerItem]) async {
         guard !items.isEmpty else { return }
-        guard viewModel.canAddMoreImages else {
-            viewModel.errorMessage = "Maximal 3 Bilder pro Memo."
-            selectedPhotoItems = []
-            return
+
+        if let message = await ImageAttachmentPicker.loadPhotos(
+            items,
+            slotsLeft: viewModel.remainingImageSlots,
+            addImage: { await viewModel.addImage($0) }
+        ) {
+            viewModel.errorMessage = message
         }
-        let toLoad = Array(items.prefix(viewModel.remainingImageSlots))
-        for item in toLoad {
-            do {
-                if let data = try await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    await viewModel.addImage(image)
-                }
-            } catch {
-                viewModel.errorMessage = "Bild konnte nicht geladen werden."
-            }
-        }
-        if items.count > toLoad.count {
-            viewModel.errorMessage = "Nur \(toLoad.count) Bild(er) übernommen. Maximum: 3."
-        }
+
         selectedPhotoItems = []
     }
 
@@ -691,11 +660,5 @@ private extension View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.06))
             }
-    }
-}
-
-private extension Array {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }

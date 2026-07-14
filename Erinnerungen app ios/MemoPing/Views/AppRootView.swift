@@ -96,45 +96,6 @@ enum RemindlyStyle {
     }
 }
 
-struct RemindlyGroupBoxStyle: GroupBoxStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            configuration.label
-                .font(.headline)
-                .foregroundStyle(.white)
-
-            configuration.content
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(RemindlyStyle.cardFill, in: RoundedRectangle(cornerRadius: RemindlyStyle.cardRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: RemindlyStyle.cardRadius, style: .continuous)
-                .strokeBorder(RemindlyStyle.border)
-        }
-    }
-}
-
-struct RemindlyPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .opacity(configuration.isPressed ? 0.82 : 1)
-            .animation(.snappy(duration: 0.16), value: configuration.isPressed)
-    }
-}
-
-extension View {
-    func remindlyCard(radius: CGFloat = RemindlyStyle.cardRadius) -> some View {
-        self
-            .background(RemindlyStyle.quietGradient, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(RemindlyStyle.border)
-            }
-    }
-}
-
 struct AppRootView: View {
     @StateObject private var captureRequestCenter = CaptureRequestCenter.shared
 

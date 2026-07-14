@@ -87,7 +87,9 @@ private extension Array where Element: Equatable {
     }
 }
 
-private extension Array {
+// Auch von DataDetectionService und PreviewViewModel genutzt —
+// vorher lag diese Extension als private Kopie in vier Dateien.
+extension Array {
     subscript(safe index: Index) -> Element? {
         indices.contains(index) ? self[index] : nil
     }
