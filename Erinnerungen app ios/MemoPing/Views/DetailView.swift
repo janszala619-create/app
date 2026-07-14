@@ -311,6 +311,7 @@ struct DetailView: View {
                 try await NotificationService.shared.scheduleReminder(for: item)
                 try await syncCalendarEventIfNeeded()
                 try modelContext.save()
+                MemoWidgetSnapshotUpdater.refresh(in: modelContext)
             } catch {
                 errorMessage = error.localizedDescription
             }
