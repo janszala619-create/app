@@ -290,12 +290,11 @@ struct DetailView: View {
             snoozeReminder(by: seconds)
         } label: {
             Text(label)
-                .font(.caption.weight(.semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(.accentColor)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .frame(maxWidth: .infinity)
-                .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
     }

@@ -320,6 +320,9 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 32, height: 32)
                     .background(Color(.tertiarySystemGroupedBackground), in: Circle())
+                    // Sichtbarer Kreis bleibt 32 pt, Trefferfläche mindestens 44 pt
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Kategorie bearbeiten")
@@ -332,6 +335,8 @@ struct SettingsView: View {
                     .foregroundStyle(.red)
                     .frame(width: 32, height: 32)
                     .background(Color.red.opacity(0.1), in: Circle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Kategorie löschen")
