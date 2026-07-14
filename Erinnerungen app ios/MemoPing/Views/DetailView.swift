@@ -557,30 +557,9 @@ struct DetailView: View {
                 .buttonStyle(.plain)
             }
 
-            // Als erledigt markieren / Erledigt-Status
-            if item.isCompleted {
-                Button {
-                    setCompleted(false)
-                } label: {
-                    Label("Als offen markieren", systemImage: "arrow.uturn.left.circle")
-                        .font(.subheadline.weight(.medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 13)
-                        .foregroundStyle(.secondary)
-                        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            } else {
-                Button { setCompleted(true) } label: {
-                    Label("Als erledigt markieren", systemImage: "checkmark.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 13)
-                        .foregroundStyle(.white)
-                        .background(Color.green, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            }
+            // Erledigen/Wiederöffnen läuft ausschließlich über den
+            // Erledigt-Toggle in der Erinnerungs-Karte — die früheren
+            // Zusatz-Buttons hier waren ein dritter, redundanter Weg.
 
             // Löschen
             Button(role: .destructive) {
