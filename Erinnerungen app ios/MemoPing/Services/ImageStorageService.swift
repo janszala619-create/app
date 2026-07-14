@@ -18,6 +18,7 @@ final class ImageStorageService {
     static let shared = ImageStorageService()
 
     private let folderName = "MemoPingImages"
+    private var didEnsureBackupInclusion = false
 
     private init() {}
 
@@ -63,9 +64,16 @@ final class ImageStorageService {
 
         if !FileManager.default.fileExists(atPath: directory.path) {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+
+        // Memo-Bilder sind Nutzdaten und müssen ins iCloud-/Geräte-Backup.
+        // Frühere Versionen hatten den Ordner vom Backup ausgeschlossen; das
+        // wird hier für bestehende Installationen einmalig zurückgenommen.
+        if !didEnsureBackupInclusion {
             var values = URLResourceValues()
-            values.isExcludedFromBackup = true
+            values.isExcludedFromBackup = false
             try? directory.setResourceValues(values)
+            didEnsureBackupInclusion = true
         }
 
         return directory
