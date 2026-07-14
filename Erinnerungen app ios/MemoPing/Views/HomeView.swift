@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
@@ -252,7 +253,7 @@ struct HomeView: View {
         Button(action: action) {
             Label(label, systemImage: systemImage)
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(isActive ? .white : tint)
+                .foregroundStyle(isActive ? activeChipTextColor(for: tint) : tint)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(
@@ -262,6 +263,12 @@ struct HomeView: View {
         }
         .buttonStyle(.plain)
         .animation(.snappy(duration: 0.15), value: isActive)
+    }
+
+    /// Weiße Schrift ist auf hellen Tints (Gelb, Orange, Teal) nicht lesbar —
+    /// helle Chip-Hintergründe bekommen deshalb dunkle Schrift.
+    private func activeChipTextColor(for tint: Color) -> Color {
+        tint.isBrightTint ? .black : .white
     }
 
     // MARK: - Section Header
@@ -385,6 +392,18 @@ struct HomeView: View {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+}
+
+private extension Color {
+    /// Relative Luminanz als Entscheidungsgrundlage für lesbare Schrift auf Tint-Flächen.
+    var isBrightTint: Bool {
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        guard UIColor(self).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return false
+        }
+
+        return (0.2126 * red + 0.7152 * green + 0.0722 * blue) > 0.55
     }
 }
 
