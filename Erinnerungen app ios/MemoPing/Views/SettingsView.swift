@@ -144,7 +144,7 @@ struct SettingsView: View {
 
             Divider()
 
-            Text("Memos werden über Apples iCloud/CloudKit synchronisiert, wenn iCloud auf diesem Gerät aktiv ist.")
+            Text("iCloud-Sync ist in dieser Version nicht aktiv — alle Memos werden lokal auf diesem iPhone gespeichert. CloudKit ist für einen späteren signierten Build vorbereitet.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
