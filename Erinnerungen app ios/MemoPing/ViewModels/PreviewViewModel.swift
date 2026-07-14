@@ -130,7 +130,7 @@ final class PreviewViewModel: ObservableObject {
         detectedInfo.dates.enumerated().map { index, date in
             DetectedDateSuggestion(
                 date: date,
-                displayText: detectedInfo.dateStrings[safe: index] ?? date.formatted(date: .abbreviated, time: .shortened),
+                displayText: detectedInfo.dateStrings[safe: index] ?? date.germanFormatted(date: .abbreviated, time: .shortened),
                 isFuture: date > Date()
             )
         }

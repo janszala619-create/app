@@ -101,7 +101,7 @@ struct DetailView: View {
             }
 
             // Erstellt-Info
-            Text("Erstellt \(item.createdAt.formatted(date: .abbreviated, time: .shortened))")
+            Text("Erstellt \(item.createdAt.germanFormatted(date: .abbreviated, time: .shortened))")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -227,7 +227,7 @@ struct DetailView: View {
                                 .font(.subheadline.weight(.medium))
                                 .foregroundStyle(.green)
 
-                            Text(reminderDate.formatted(date: .complete, time: .shortened))
+                            Text(reminderDate.germanFormatted(date: .complete, time: .shortened))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
 

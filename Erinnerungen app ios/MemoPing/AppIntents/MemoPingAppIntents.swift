@@ -135,7 +135,7 @@ enum MemoIntentDataProvider {
         return items
             .prefix(6)
             .map { item in
-                let time = item.reminderDate?.formatted(date: .omitted, time: .shortened) ?? "ohne Uhrzeit"
+                let time = item.reminderDate?.germanFormatted(date: .omitted, time: .shortened) ?? "ohne Uhrzeit"
                 return "\(time): \(item.title)"
             }
             .joined(separator: "\n")
@@ -179,7 +179,7 @@ enum MemoIntentDataProvider {
     }
 
     private static func entity(from item: MemoItem) -> ReminderEntity {
-        let dueText = item.reminderDate?.formatted(date: .abbreviated, time: .shortened) ?? "ohne Termin"
+        let dueText = item.reminderDate?.germanFormatted(date: .abbreviated, time: .shortened) ?? "ohne Termin"
         return ReminderEntity(
             id: item.id.uuidString,
             title: item.title.isEmpty ? "Ohne Titel" : item.title,

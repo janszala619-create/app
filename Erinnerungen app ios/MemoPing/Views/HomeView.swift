@@ -188,11 +188,15 @@ struct HomeView: View {
         }
     }
 
-    private var todayLabel: String {
+    private static let todayLabelFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "de_DE")
+        formatter.locale = Date.germanLocale
         formatter.dateFormat = "EEEE, d. MMMM"
-        return formatter.string(from: Date())
+        return formatter
+    }()
+
+    private var todayLabel: String {
+        Self.todayLabelFormatter.string(from: Date())
     }
 
     private func statPill(count: Int, label: String, systemImage: String, tint: Color) -> some View {

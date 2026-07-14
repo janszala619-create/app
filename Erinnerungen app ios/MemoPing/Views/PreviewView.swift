@@ -270,7 +270,7 @@ struct PreviewView: View {
                         Text("Erkannter Termin")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        Text(suggestedDate.formatted(date: .abbreviated, time: .shortened))
+                        Text(suggestedDate.germanFormatted(date: .abbreviated, time: .shortened))
                             .font(.subheadline.weight(.medium))
                     }
 

@@ -87,7 +87,7 @@ struct MemoPingTodayReminderWidgetView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(entry.snapshot.reminders.prefix(4)) { reminder in
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text(reminder.dueDate.formatted(date: .omitted, time: .shortened))
+                            Text(reminder.dueDate.germanFormatted(date: .omitted, time: .shortened))
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.secondary)
                                 .frame(width: 44, alignment: .leading)

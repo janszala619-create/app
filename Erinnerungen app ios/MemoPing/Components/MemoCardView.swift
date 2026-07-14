@@ -124,7 +124,7 @@ struct MemoCardView: View {
                 // Erinnerungsdatum
                 if item.hasReminder, let reminderDate = item.reminderDate {
                     memoBadge(
-                        reminderDate.formatted(date: .abbreviated, time: .shortened),
+                        reminderDate.germanFormatted(date: .abbreviated, time: .shortened),
                         systemImage: "bell",
                         tint: .secondary
                     )
