@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var iCloudState: ICloudAccountState = .couldNotDetermine
     @State private var errorMessage: String?
     @State private var categoryEditor: CategoryEditorDraft?
+    @State private var categoryPendingDeletion: MemoCategoryItem?
 
     var body: some View {
         ScrollView {
@@ -47,6 +48,17 @@ struct SettingsView: View {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
+        }
+        .confirmationDialog(
+            "Kategorie wirklich löschen?",
+            isPresented: categoryDeletionBinding,
+            titleVisibility: .visible,
+            presenting: categoryPendingDeletion
+        ) { category in
+            Button("Löschen", role: .destructive) { deleteCategory(category) }
+            Button("Abbrechen", role: .cancel) {}
+        } message: { category in
+            Text(categoryDeletionMessage(for: category))
         }
     }
 
@@ -313,7 +325,7 @@ struct SettingsView: View {
             .accessibilityLabel("Kategorie bearbeiten")
 
             Button(role: .destructive) {
-                deleteCategory(category)
+                categoryPendingDeletion = category
             } label: {
                 Image(systemName: "trash")
                     .font(.subheadline)
@@ -334,6 +346,23 @@ struct SettingsView: View {
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
         )
+    }
+
+    private var categoryDeletionBinding: Binding<Bool> {
+        Binding(
+            get: { categoryPendingDeletion != nil },
+            set: { if !$0 { categoryPendingDeletion = nil } }
+        )
+    }
+
+    private func categoryDeletionMessage(for category: MemoCategoryItem) -> String {
+        let affectedCount = memoItems.filter { $0.categoryRawValue == category.id }.count
+        guard affectedCount > 0 else {
+            return "„\(category.displayName)“ wird entfernt."
+        }
+
+        let memoText = affectedCount == 1 ? "1 Memo verliert" : "\(affectedCount) Memos verlieren"
+        return "„\(category.displayName)“ wird entfernt. \(memoText) dabei die Kategorie."
     }
 
     private var calendarStatusAllowsSync: Bool {
