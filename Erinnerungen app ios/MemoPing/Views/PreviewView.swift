@@ -394,7 +394,6 @@ struct PreviewView: View {
                         tint: .purple
                     ) {
                         ForEach(viewModel.detectedDateSuggestions) { suggestion in
-                            let index = viewModel.detectedDateSuggestions.firstIndex(of: suggestion) ?? 0
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(suggestion.displayText)
                                     .font(.subheadline)
