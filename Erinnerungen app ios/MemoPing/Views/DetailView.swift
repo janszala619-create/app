@@ -282,12 +282,13 @@ struct DetailView: View {
     }
 
     private func nextMorningOffset() -> TimeInterval {
-        var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
-        components.day = (components.day ?? 0) + 1
-        components.hour = 9
-        components.minute = 0
-        let tomorrow = Calendar.current.date(from: components) ?? Date().addingTimeInterval(86400)
-        return tomorrow.timeIntervalSinceNow
+        let calendar = Calendar.current
+        let startOfTomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))
+        let tomorrowMorning = startOfTomorrow.flatMap {
+            calendar.date(bySettingHour: 9, minute: 0, second: 0, of: $0)
+        } ?? Date().addingTimeInterval(86_400)
+
+        return tomorrowMorning.timeIntervalSinceNow
     }
 
     private func snoozeButton(label: String, seconds: TimeInterval) -> some View {
