@@ -309,6 +309,7 @@ struct DetailView: View {
         Task { @MainActor in
             do {
                 try await NotificationService.shared.scheduleReminder(for: item)
+                try await syncCalendarEventIfNeeded()
                 try modelContext.save()
             } catch {
                 errorMessage = error.localizedDescription
@@ -695,6 +696,7 @@ struct DetailView: View {
                     await removeCalendarEvent()
                 } else {
                     try await NotificationService.shared.scheduleReminder(for: item)
+                    try await syncCalendarEventIfNeeded()
                 }
                 try modelContext.save()
                 MemoWidgetSnapshotUpdater.refresh(in: modelContext)
@@ -762,6 +764,13 @@ struct DetailView: View {
             }
             catch { errorMessage = error.localizedDescription }
         }
+    }
+
+    /// Überträgt ein geändertes Erinnerungsdatum (Bearbeiten, Snooze) auf den
+    /// bereits synchronisierten Kalendertermin, damit Kalender und App nicht auseinanderlaufen.
+    private func syncCalendarEventIfNeeded() async throws {
+        guard item.syncsToCalendar, item.calendarEventIdentifier != nil else { return }
+        item.calendarEventIdentifier = try await CalendarSyncService.shared.saveEvent(for: item)
     }
 
     /// Löscht den synchronisierten Kalendertermin, damit dessen Alarme und
