@@ -146,6 +146,10 @@ final class CaptureViewModel: ObservableObject {
             imageAttachments[index].recognizedText = text
             rebuildRecognizedText()
         } catch OCRServiceError.noTextFound {
+            // Leerstring = OCR ist gelaufen, ohne Treffer — die Vorschau muss nicht erneut erkennen.
+            if let index = imageAttachments.firstIndex(where: { $0.id == attachment.id }) {
+                imageAttachments[index].recognizedText = ""
+            }
             errorMessage = "Im Bild wurde kein Text erkannt."
         } catch {
             errorMessage = error.localizedDescription
@@ -168,7 +172,7 @@ final class CaptureViewModel: ObservableObject {
             title: "",
             bodyText: inputText.trimmed,
             recognizedText: recognizedText.trimmed,
-            images: imageAttachments.map(\.image),
+            images: imageAttachments.map { MemoDraftImage(image: $0.image, recognizedText: $0.recognizedText) },
             sourceType: sourceType,
             detectedInfo: info
         )
