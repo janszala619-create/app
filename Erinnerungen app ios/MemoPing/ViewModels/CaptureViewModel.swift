@@ -73,10 +73,6 @@ final class CaptureViewModel: ObservableObject {
         remainingImageSlots > 0
     }
 
-    var imageLimitMessage: String? {
-        canAddMoreImages ? nil : "Maximal 3 Bilder erreicht."
-    }
-
     var speechStatusText: String {
         if isPreparingSpeech {
             return "Transkription wird erstellt..."

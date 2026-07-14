@@ -139,24 +139,6 @@ final class ImageStorageService {
     }
 }
 
-extension ImageStorageService {
-    func save(_ image: UIImage) throws -> String {
-        try saveImage(image)
-    }
-
-    func load(fileName: String) -> UIImage? {
-        loadImage(fileName: fileName)
-    }
-
-    func delete(fileName: String) {
-        deleteImage(fileName: fileName)
-    }
-
-    func delete(fileNames: [String]) {
-        deleteImages(fileNames: fileNames)
-    }
-}
-
 private extension UIImage {
     func resizedForMemoStorage(maxPixelDimension: CGFloat) -> UIImage {
         let longestSide = max(size.width, size.height)

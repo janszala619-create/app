@@ -27,7 +27,6 @@ struct PreviewView: View {
                 heroCard
                 contentCard
                 reminderCard
-                imagesCard
                 detectedInfoCard
                 organizationCard
                 actionCard
@@ -464,13 +463,6 @@ struct PreviewView: View {
         .detailCard()
     }
 
-    // MARK: - Images Card (separates Bild-Preview wenn vorhanden)
-
-    @ViewBuilder
-    private var imagesCard: some View {
-        EmptyView() // Bilder sind jetzt in contentCard integriert
-    }
-
     // MARK: - Action Card
 
     private var actionCard: some View {
@@ -669,11 +661,5 @@ private extension View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.06))
             }
-    }
-}
-
-private extension Array {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }
