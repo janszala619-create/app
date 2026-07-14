@@ -747,6 +747,8 @@ struct DetailView: View {
                 do { try await NotificationService.shared.scheduleReminder(for: item) }
                 catch { errorMessage = error.localizedDescription }
             }
+            do { try modelContext.save() }
+            catch { errorMessage = error.localizedDescription }
             MemoWidgetSnapshotUpdater.refresh(in: modelContext)
         }
     }
