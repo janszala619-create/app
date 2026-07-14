@@ -99,6 +99,8 @@ final class SpeechRecognitionService: NSObject, ObservableObject {
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
+        // Datenschutz-Zusage der App: Erkennung bleibt auf dem Gerät, wann immer iOS das anbietet.
+        request.requiresOnDeviceRecognition = speechRecognizer.supportsOnDeviceRecognition
         recognitionRequest = request
 
         do {

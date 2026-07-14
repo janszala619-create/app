@@ -9,7 +9,7 @@ RemindlyAi ist eine private iOS-App zum schnellen Erfassen von Notizen, Erinneru
 - Keine Firebase- oder KI-API
 - SwiftData speichert Memo-Daten in der aktuellen unsigned IPA lokal auf dem Geraet
 - Bilder werden als Dateien lokal in `Application Support/MemoPingImages` gespeichert und in dieser Version nicht zwischen Geraeten synchronisiert
-- Spracherkennung wird mit `requiresOnDeviceRecognition = true` auf lokale Erkennung begrenzt
+- Spracherkennung laeuft mit `requiresOnDeviceRecognition` lokal auf dem Geraet, sofern iOS On-Device-Erkennung fuer Deutsch unterstuetzt
 
 ## Projekt starten
 
@@ -42,6 +42,13 @@ Die Permission Strings sind bereits in `MemoPing/App/Info.plist` eingetragen:
 - Kameraaufnahme ist im iOS Simulator normalerweise nicht verfuegbar.
 - Lokale On-Device-Spracherkennung kann je nach Simulator, Sprache und macOS/Xcode-Konfiguration nicht verfuegbar sein.
 - Bildauswahl, OCR, SwiftData und lokale Benachrichtigungen lassen sich im Simulator grundsaetzlich testen.
+
+## Bekannte Limitierungen (unsigned IPA / Sideloadly)
+
+- Die App Group `group.com.example.MemoPing` (Widget-Datenaustausch) funktioniert erst, wenn beim Signieren mit Sideloadly bzw. Xcode eine App-Group-ID des eigenen Teams eingetragen wird. Ohne gueltige App Group zeigt das Widget keine Daten.
+- CloudKit-Entitlements sind vorbereitet, aber ohne signierten Build mit echter Team ID wirkungslos (siehe iCloud/CloudKit Status oben).
+- Kalendertermine erhalten eine `memoping://`-URL; ein URL-Scheme ist dafuer nicht registriert, der Link in der Kalender-App oeffnet die App daher nicht.
+- `requestRecordPermission` ist ab iOS 17 deprecated (Nachfolger: `AVAudioApplication`) — aktuell nur eine Compiler-Warnung.
 
 ## Struktur
 

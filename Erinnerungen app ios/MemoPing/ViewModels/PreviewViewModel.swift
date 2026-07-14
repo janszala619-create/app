@@ -94,7 +94,7 @@ final class PreviewViewModel: ObservableObject {
     @Published var notificationStatus: UNAuthorizationStatus = .notDetermined
 
     private var sourceType: MemoSourceType
-    private var initialImages: [UIImage]
+    private var initialImages: [MemoDraftImage]
     private var didPersistImages = false
     private var activeOCRFileNames = Set<String>()
     private var completedOCRFileNames = Set<String>()
@@ -130,7 +130,7 @@ final class PreviewViewModel: ObservableObject {
         detectedInfo.dates.enumerated().map { index, date in
             DetectedDateSuggestion(
                 date: date,
-                displayText: detectedInfo.dateStrings[safe: index] ?? date.formatted(date: .abbreviated, time: .shortened),
+                displayText: detectedInfo.dateStrings[safe: index] ?? date.germanFormatted(date: .abbreviated, time: .shortened),
                 isFuture: date > Date()
             )
         }
@@ -229,12 +229,14 @@ final class PreviewViewModel: ObservableObject {
         let imagesToStore = initialImages
         initialImages = []
 
-        for image in imagesToStore {
-            await addImage(image)
+        for draftImage in imagesToStore {
+            await addImage(draftImage.image, precomputedText: draftImage.recognizedText)
         }
     }
 
-    func addImage(_ image: UIImage) async {
+    /// `precomputedText` stammt aus dem Erfassen-Schritt: nil = OCR hier nachholen,
+    /// "" = OCR lief ohne Treffer, sonst = erkannter Text (kein erneutes OCR nötig).
+    func addImage(_ image: UIImage, precomputedText: String? = nil) async {
         guard canAddMoreImages else {
             errorMessage = PreviewValidationError.imageLimitReached.localizedDescription
             return
@@ -247,7 +249,12 @@ final class PreviewViewModel: ObservableObject {
             let fileName = try imageStorage.saveImage(image)
             let attachment = PreviewImageAttachment(fileName: fileName, image: image)
             imageAttachments.append(attachment)
-            startOCR(for: attachment)
+
+            if let precomputedText {
+                adoptPrecomputedText(precomputedText, for: fileName)
+            } else {
+                startOCR(for: attachment)
+            }
         } catch {
             errorMessage = error.localizedDescription
             return
@@ -255,6 +262,20 @@ final class PreviewViewModel: ObservableObject {
 
         sourceType = bodyText.trimmed.isEmpty && recognizedText.trimmed.isEmpty ? .image : .mixed
         didSkipPhotoQuestion = false
+    }
+
+    private func adoptPrecomputedText(_ text: String, for fileName: String) {
+        completedOCRFileNames.insert(fileName)
+
+        let trimmedText = text.trimmed
+        if trimmedText.isEmpty {
+            noTextOCRFileNames.insert(fileName)
+        } else {
+            recognizedTextsByFileName[fileName] = trimmedText
+            rebuildRecognizedTextFromImages()
+        }
+
+        updateOCRState()
     }
 
     func removeImage(_ attachment: PreviewImageAttachment) {
@@ -361,10 +382,12 @@ final class PreviewViewModel: ObservableObject {
                 notificationService.cancelReminder(for: memo)
             }
 
+            // Nur das Memo zurückrollen — Bilddateien und Attachments bleiben
+            // erhalten, damit nach einem Fehler (z. B. verweigerte Benachrichtigung)
+            // keine Fotos verloren gehen und erneut gespeichert werden kann.
+            // Die Discard-Pfade räumen die Dateien weiterhin auf.
             modelContext.delete(memo)
             try? modelContext.save()
-            imageStorage.deleteImages(fileNames: storedImageNames)
-            imageAttachments.removeAll()
             await refreshNotificationStatus()
             throw error
         }

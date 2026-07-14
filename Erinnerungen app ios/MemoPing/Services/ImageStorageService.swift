@@ -1,3 +1,4 @@
+import ImageIO
 import UIKit
 
 enum ImageStorageError: LocalizedError {
@@ -18,6 +19,7 @@ final class ImageStorageService {
     static let shared = ImageStorageService()
 
     private let folderName = "MemoPingImages"
+    private var didEnsureBackupInclusion = false
 
     private init() {}
 
@@ -42,6 +44,35 @@ final class ImageStorageService {
         return UIImage(contentsOfFile: directory.appendingPathComponent(fileName).path)
     }
 
+    /// Lädt eine heruntergerechnete Version über ImageIO-Downsampling,
+    /// ohne das volle JPEG zu dekodieren — für Vorschau-Grids ausreichend
+    /// und deutlich speicher- und CPU-schonender als `loadImage`.
+    func loadThumbnail(fileName: String, maxPixelDimension: CGFloat) -> UIImage? {
+        guard let directory = try? imageDirectory() else {
+            return nil
+        }
+
+        let fileURL = directory.appendingPathComponent(fileName)
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+
+        guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, sourceOptions) else {
+            return nil
+        }
+
+        let thumbnailOptions = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelDimension
+        ] as CFDictionary
+
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions) else {
+            return nil
+        }
+
+        return UIImage(cgImage: cgImage)
+    }
+
     func deleteImage(fileName: String) {
         guard let directory = try? imageDirectory() else {
             return
@@ -54,6 +85,35 @@ final class ImageStorageService {
         fileNames.forEach(deleteImage(fileName:))
     }
 
+    /// Entfernt Bilddateien, die kein Memo mehr referenziert — z. B. Reste aus
+    /// einem Vorschau-Schritt, in dem die App beendet wurde. Die Schonfrist
+    /// schützt Dateien eines gerade laufenden Erfassen-Flows.
+    func deleteOrphanedImages(referencedFileNames: Set<String>, minimumAge: TimeInterval = 24 * 60 * 60) {
+        guard let directory = try? imageDirectory() else {
+            return
+        }
+
+        let fileManager = FileManager.default
+        guard let fileURLs = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.creationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return
+        }
+
+        let cutoffDate = Date().addingTimeInterval(-minimumAge)
+
+        for fileURL in fileURLs where !referencedFileNames.contains(fileURL.lastPathComponent) {
+            let creationDate = (try? fileURL.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? .distantPast
+            guard creationDate < cutoffDate else {
+                continue
+            }
+
+            try? fileManager.removeItem(at: fileURL)
+        }
+    }
+
     private func imageDirectory() throws -> URL {
         guard let supportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             throw ImageStorageError.cannotLoadDirectory
@@ -63,9 +123,16 @@ final class ImageStorageService {
 
         if !FileManager.default.fileExists(atPath: directory.path) {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+
+        // Memo-Bilder sind Nutzdaten und müssen ins iCloud-/Geräte-Backup.
+        // Frühere Versionen hatten den Ordner vom Backup ausgeschlossen; das
+        // wird hier für bestehende Installationen einmalig zurückgenommen.
+        if !didEnsureBackupInclusion {
             var values = URLResourceValues()
-            values.isExcludedFromBackup = true
+            values.isExcludedFromBackup = false
             try? directory.setResourceValues(values)
+            didEnsureBackupInclusion = true
         }
 
         return directory

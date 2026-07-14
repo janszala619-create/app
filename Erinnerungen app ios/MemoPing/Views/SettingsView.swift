@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var iCloudState: ICloudAccountState = .couldNotDetermine
     @State private var errorMessage: String?
     @State private var categoryEditor: CategoryEditorDraft?
+    @State private var categoryPendingDeletion: MemoCategoryItem?
 
     var body: some View {
         ScrollView {
@@ -47,6 +48,17 @@ struct SettingsView: View {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
+        }
+        .confirmationDialog(
+            "Kategorie wirklich löschen?",
+            isPresented: categoryDeletionBinding,
+            titleVisibility: .visible,
+            presenting: categoryPendingDeletion
+        ) { category in
+            Button("Löschen", role: .destructive) { deleteCategory(category) }
+            Button("Abbrechen", role: .cancel) {}
+        } message: { category in
+            Text(categoryDeletionMessage(for: category))
         }
     }
 
@@ -132,7 +144,7 @@ struct SettingsView: View {
 
             Divider()
 
-            Text("Memos werden über Apples iCloud/CloudKit synchronisiert, wenn iCloud auf diesem Gerät aktiv ist.")
+            Text("iCloud-Sync ist in dieser Version nicht aktiv — alle Memos werden lokal auf diesem iPhone gespeichert. CloudKit ist für einen späteren signierten Build vorbereitet.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -308,18 +320,23 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 32, height: 32)
                     .background(Color(.tertiarySystemGroupedBackground), in: Circle())
+                    // Sichtbarer Kreis bleibt 32 pt, Trefferfläche mindestens 44 pt
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Kategorie bearbeiten")
 
             Button(role: .destructive) {
-                deleteCategory(category)
+                categoryPendingDeletion = category
             } label: {
                 Image(systemName: "trash")
                     .font(.subheadline)
                     .foregroundStyle(.red)
                     .frame(width: 32, height: 32)
                     .background(Color.red.opacity(0.1), in: Circle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Kategorie löschen")
@@ -334,6 +351,23 @@ struct SettingsView: View {
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
         )
+    }
+
+    private var categoryDeletionBinding: Binding<Bool> {
+        Binding(
+            get: { categoryPendingDeletion != nil },
+            set: { if !$0 { categoryPendingDeletion = nil } }
+        )
+    }
+
+    private func categoryDeletionMessage(for category: MemoCategoryItem) -> String {
+        let affectedCount = memoItems.filter { $0.categoryRawValue == category.id }.count
+        guard affectedCount > 0 else {
+            return "„\(category.displayName)“ wird entfernt."
+        }
+
+        let memoText = affectedCount == 1 ? "1 Memo verliert" : "\(affectedCount) Memos verlieren"
+        return "„\(category.displayName)“ wird entfernt. \(memoText) dabei die Kategorie."
     }
 
     private var calendarStatusAllowsSync: Bool {

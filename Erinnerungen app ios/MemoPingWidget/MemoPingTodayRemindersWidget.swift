@@ -66,11 +66,14 @@ struct MemoPingTodayReminderWidgetView: View {
             HStack {
                 Label("Heute", systemImage: "bell")
                     .font(.headline)
+                    .lineLimit(1)
+                    .layoutPriority(1)
                 Spacer()
                 if !entry.snapshot.reminders.isEmpty {
                     Text("\(entry.snapshot.reminders.count) offen")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
 
@@ -84,7 +87,7 @@ struct MemoPingTodayReminderWidgetView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(entry.snapshot.reminders.prefix(4)) { reminder in
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text(reminder.dueDate.formatted(date: .omitted, time: .shortened))
+                            Text(reminder.dueDate.germanFormatted(date: .omitted, time: .shortened))
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.secondary)
                                 .frame(width: 44, alignment: .leading)

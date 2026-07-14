@@ -43,3 +43,17 @@ enum MemoWidgetSnapshotStore {
 enum MemoPingWidgetConstants {
     static let todayReminderKind = "MemoPingTodayRemindersWidget"
 }
+
+extension Date {
+    /// Alle UI-Texte der App sind deutsch — Datumsangaben werden deshalb
+    /// unabhängig von der Geräte-Locale einheitlich deutsch formatiert,
+    /// sonst entstehen Mischformen wie „14. Jul 2026 at 21:50".
+    static let germanLocale = Locale(identifier: "de_DE")
+
+    func germanFormatted(
+        date dateStyle: Date.FormatStyle.DateStyle,
+        time timeStyle: Date.FormatStyle.TimeStyle
+    ) -> String {
+        formatted(Date.FormatStyle(date: dateStyle, time: timeStyle, locale: Self.germanLocale))
+    }
+}

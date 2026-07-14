@@ -21,6 +21,8 @@ struct DetailView: View {
     @State private var errorMessage: String?
     @State private var selectedImage: DetailImage?
     @State private var showDeleteConfirmation = false
+    @State private var loadedThumbnails: [String: UIImage] = [:]
+    @State private var didLoadThumbnails = false
 
     private let imageStorage = ImageStorageService.shared
 
@@ -42,6 +44,9 @@ struct DetailView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Details")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: item.imageFileNames) {
+            await loadThumbnails()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(isEditing ? "Sichern" : "Bearbeiten") {
@@ -101,7 +106,7 @@ struct DetailView: View {
             }
 
             // Erstellt-Info
-            Text("Erstellt \(item.createdAt.formatted(date: .abbreviated, time: .shortened))")
+            Text("Erstellt \(item.createdAt.germanFormatted(date: .abbreviated, time: .shortened))")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -227,7 +232,7 @@ struct DetailView: View {
                                 .font(.subheadline.weight(.medium))
                                 .foregroundStyle(.green)
 
-                            Text(reminderDate.formatted(date: .complete, time: .shortened))
+                            Text(reminderDate.germanFormatted(date: .complete, time: .shortened))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
 
@@ -277,12 +282,13 @@ struct DetailView: View {
     }
 
     private func nextMorningOffset() -> TimeInterval {
-        var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
-        components.day = (components.day ?? 0) + 1
-        components.hour = 9
-        components.minute = 0
-        let tomorrow = Calendar.current.date(from: components) ?? Date().addingTimeInterval(86400)
-        return tomorrow.timeIntervalSinceNow
+        let calendar = Calendar.current
+        let startOfTomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))
+        let tomorrowMorning = startOfTomorrow.flatMap {
+            calendar.date(bySettingHour: 9, minute: 0, second: 0, of: $0)
+        } ?? Date().addingTimeInterval(86_400)
+
+        return tomorrowMorning.timeIntervalSinceNow
     }
 
     private func snoozeButton(label: String, seconds: TimeInterval) -> some View {
@@ -290,12 +296,11 @@ struct DetailView: View {
             snoozeReminder(by: seconds)
         } label: {
             Text(label)
-                .font(.caption.weight(.semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(.accentColor)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .frame(maxWidth: .infinity)
-                .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -309,7 +314,9 @@ struct DetailView: View {
         Task { @MainActor in
             do {
                 try await NotificationService.shared.scheduleReminder(for: item)
+                try await syncCalendarEventIfNeeded()
                 try modelContext.save()
+                MemoWidgetSnapshotUpdater.refresh(in: modelContext)
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -393,9 +400,9 @@ struct DetailView: View {
                         spacing: 10
                     ) {
                         ForEach(item.imageFileNames, id: \.self) { fileName in
-                            if let image = imageStorage.loadImage(fileName: fileName) {
+                            if let image = loadedThumbnails[fileName] {
                                 Button {
-                                    selectedImage = DetailImage(fileName: fileName, image: image)
+                                    presentFullImage(fileName: fileName)
                                 } label: {
                                     Image(uiImage: image)
                                         .resizable()
@@ -409,15 +416,16 @@ struct DetailView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("Bild öffnen")
+                            } else if didLoadThumbnails {
+                                imagePlaceholder {
+                                    Label("Nicht gefunden", systemImage: "photo.badge.exclamationmark")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             } else {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(Color(.tertiarySystemGroupedBackground))
-                                    .frame(height: 140)
-                                    .overlay {
-                                        Label("Nicht gefunden", systemImage: "photo.badge.exclamationmark")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
+                                imagePlaceholder {
+                                    ProgressView()
+                                }
                             }
                         }
                     }
@@ -695,6 +703,7 @@ struct DetailView: View {
                     await removeCalendarEvent()
                 } else {
                     try await NotificationService.shared.scheduleReminder(for: item)
+                    try await syncCalendarEventIfNeeded()
                 }
                 try modelContext.save()
                 MemoWidgetSnapshotUpdater.refresh(in: modelContext)
@@ -745,6 +754,8 @@ struct DetailView: View {
                 do { try await NotificationService.shared.scheduleReminder(for: item) }
                 catch { errorMessage = error.localizedDescription }
             }
+            do { try modelContext.save() }
+            catch { errorMessage = error.localizedDescription }
             MemoWidgetSnapshotUpdater.refresh(in: modelContext)
         }
     }
@@ -762,6 +773,13 @@ struct DetailView: View {
             }
             catch { errorMessage = error.localizedDescription }
         }
+    }
+
+    /// Überträgt ein geändertes Erinnerungsdatum (Bearbeiten, Snooze) auf den
+    /// bereits synchronisierten Kalendertermin, damit Kalender und App nicht auseinanderlaufen.
+    private func syncCalendarEventIfNeeded() async throws {
+        guard item.syncsToCalendar, item.calendarEventIdentifier != nil else { return }
+        item.calendarEventIdentifier = try await CalendarSyncService.shared.saveEvent(for: item)
     }
 
     /// Löscht den synchronisierten Kalendertermin, damit dessen Alarme und
@@ -794,6 +812,51 @@ struct DetailView: View {
         item.detectedURLs = info.urls
         item.detectedAddresses = info.addresses
         item.detectedDateStrings = info.formattedDates()
+    }
+
+    private func imagePlaceholder<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Color(.tertiarySystemGroupedBackground))
+            .frame(height: 140)
+            .overlay { content() }
+    }
+
+    /// Dekodiert die Bilder abseits des Main Threads als Thumbnails —
+    /// der synchrone Volldecode im View-Body ruckelte bei jedem Re-Render.
+    private func loadThumbnails() async {
+        let fileNames = item.imageFileNames
+        guard !fileNames.isEmpty else {
+            loadedThumbnails = [:]
+            didLoadThumbnails = true
+            return
+        }
+
+        let storage = imageStorage
+        let thumbnails = await Task.detached(priority: .userInitiated) {
+            var result: [String: UIImage] = [:]
+            for fileName in fileNames {
+                result[fileName] = storage.loadThumbnail(fileName: fileName, maxPixelDimension: 700)
+            }
+            return result
+        }.value
+
+        loadedThumbnails = thumbnails
+        didLoadThumbnails = true
+    }
+
+    private func presentFullImage(fileName: String) {
+        Task {
+            let storage = imageStorage
+            let image = await Task.detached(priority: .userInitiated) {
+                storage.loadImage(fileName: fileName)
+            }.value
+
+            if let image {
+                selectedImage = DetailImage(fileName: fileName, image: image)
+            } else {
+                errorMessage = "Das Bild konnte nicht geladen werden."
+            }
+        }
     }
 
     private func imageDetailView(_ detailImage: DetailImage) -> some View {
