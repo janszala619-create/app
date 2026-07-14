@@ -1,3 +1,4 @@
+import ImageIO
 import UIKit
 
 enum ImageStorageError: LocalizedError {
@@ -41,6 +42,35 @@ final class ImageStorageService {
         }
 
         return UIImage(contentsOfFile: directory.appendingPathComponent(fileName).path)
+    }
+
+    /// Lädt eine heruntergerechnete Version über ImageIO-Downsampling,
+    /// ohne das volle JPEG zu dekodieren — für Vorschau-Grids ausreichend
+    /// und deutlich speicher- und CPU-schonender als `loadImage`.
+    func loadThumbnail(fileName: String, maxPixelDimension: CGFloat) -> UIImage? {
+        guard let directory = try? imageDirectory() else {
+            return nil
+        }
+
+        let fileURL = directory.appendingPathComponent(fileName)
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+
+        guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, sourceOptions) else {
+            return nil
+        }
+
+        let thumbnailOptions = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelDimension
+        ] as CFDictionary
+
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions) else {
+            return nil
+        }
+
+        return UIImage(cgImage: cgImage)
     }
 
     func deleteImage(fileName: String) {

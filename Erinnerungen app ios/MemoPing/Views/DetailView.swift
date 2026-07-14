@@ -21,6 +21,8 @@ struct DetailView: View {
     @State private var errorMessage: String?
     @State private var selectedImage: DetailImage?
     @State private var showDeleteConfirmation = false
+    @State private var loadedThumbnails: [String: UIImage] = [:]
+    @State private var didLoadThumbnails = false
 
     private let imageStorage = ImageStorageService.shared
 
@@ -42,6 +44,9 @@ struct DetailView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Details")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: item.imageFileNames) {
+            await loadThumbnails()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(isEditing ? "Sichern" : "Bearbeiten") {
@@ -394,9 +399,9 @@ struct DetailView: View {
                         spacing: 10
                     ) {
                         ForEach(item.imageFileNames, id: \.self) { fileName in
-                            if let image = imageStorage.loadImage(fileName: fileName) {
+                            if let image = loadedThumbnails[fileName] {
                                 Button {
-                                    selectedImage = DetailImage(fileName: fileName, image: image)
+                                    presentFullImage(fileName: fileName)
                                 } label: {
                                     Image(uiImage: image)
                                         .resizable()
@@ -410,15 +415,16 @@ struct DetailView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("Bild öffnen")
+                            } else if didLoadThumbnails {
+                                imagePlaceholder {
+                                    Label("Nicht gefunden", systemImage: "photo.badge.exclamationmark")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             } else {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(Color(.tertiarySystemGroupedBackground))
-                                    .frame(height: 140)
-                                    .overlay {
-                                        Label("Nicht gefunden", systemImage: "photo.badge.exclamationmark")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
+                                imagePlaceholder {
+                                    ProgressView()
+                                }
                             }
                         }
                     }
@@ -805,6 +811,51 @@ struct DetailView: View {
         item.detectedURLs = info.urls
         item.detectedAddresses = info.addresses
         item.detectedDateStrings = info.formattedDates()
+    }
+
+    private func imagePlaceholder<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Color(.tertiarySystemGroupedBackground))
+            .frame(height: 140)
+            .overlay { content() }
+    }
+
+    /// Dekodiert die Bilder abseits des Main Threads als Thumbnails —
+    /// der synchrone Volldecode im View-Body ruckelte bei jedem Re-Render.
+    private func loadThumbnails() async {
+        let fileNames = item.imageFileNames
+        guard !fileNames.isEmpty else {
+            loadedThumbnails = [:]
+            didLoadThumbnails = true
+            return
+        }
+
+        let storage = imageStorage
+        let thumbnails = await Task.detached(priority: .userInitiated) {
+            var result: [String: UIImage] = [:]
+            for fileName in fileNames {
+                result[fileName] = storage.loadThumbnail(fileName: fileName, maxPixelDimension: 700)
+            }
+            return result
+        }.value
+
+        loadedThumbnails = thumbnails
+        didLoadThumbnails = true
+    }
+
+    private func presentFullImage(fileName: String) {
+        Task {
+            let storage = imageStorage
+            let image = await Task.detached(priority: .userInitiated) {
+                storage.loadImage(fileName: fileName)
+            }.value
+
+            if let image {
+                selectedImage = DetailImage(fileName: fileName, image: image)
+            } else {
+                errorMessage = "Das Bild konnte nicht geladen werden."
+            }
+        }
     }
 
     private func imageDetailView(_ detailImage: DetailImage) -> some View {
