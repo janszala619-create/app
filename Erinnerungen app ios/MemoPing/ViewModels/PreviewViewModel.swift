@@ -382,10 +382,12 @@ final class PreviewViewModel: ObservableObject {
                 notificationService.cancelReminder(for: memo)
             }
 
+            // Nur das Memo zurückrollen — Bilddateien und Attachments bleiben
+            // erhalten, damit nach einem Fehler (z. B. verweigerte Benachrichtigung)
+            // keine Fotos verloren gehen und erneut gespeichert werden kann.
+            // Die Discard-Pfade räumen die Dateien weiterhin auf.
             modelContext.delete(memo)
             try? modelContext.save()
-            imageStorage.deleteImages(fileNames: storedImageNames)
-            imageAttachments.removeAll()
             await refreshNotificationStatus()
             throw error
         }
