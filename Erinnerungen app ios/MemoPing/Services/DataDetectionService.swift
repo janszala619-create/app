@@ -28,7 +28,7 @@ final class DataDetectionService {
                 continue
             }
 
-            if match.resultType.contains(.date), let date = match.date {
+            if match.resultType.contains(.date), let date = match.date, isPlausibleDateMatch(originalText) {
                 info.appendDate(date, originalText: originalText)
             }
 
@@ -63,11 +63,42 @@ final class DataDetectionService {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: ".,;:"))
 
-        guard !value.isEmpty else {
+        guard !value.isEmpty, isPlausibleLink(value) else {
             return nil
         }
 
         return value
+    }
+
+    /// Filtert OCR-Fragmente wie „123.de" heraus: Ein plausibler Link braucht
+    /// mindestens einen Buchstaben im Domain-Namen vor der TLD.
+    private func isPlausibleLink(_ value: String) -> Bool {
+        let lowercasedValue = value.lowercased()
+        if lowercasedValue.hasPrefix("mailto:") || lowercasedValue.contains("@") {
+            return true
+        }
+
+        var host = lowercasedValue
+        for scheme in ["https://", "http://"] where host.hasPrefix(scheme) {
+            host = String(host.dropFirst(scheme.count))
+        }
+
+        host = host.components(separatedBy: "/").first ?? host
+        host = host.components(separatedBy: ":").first ?? host
+
+        let nameLabels = host.components(separatedBy: ".").dropLast()
+        return nameLabels.contains { $0.rangeOfCharacter(from: .letters) != nil }
+    }
+
+    /// Reine Uhrzeit-Fragmente („17:07", „9 Uhr") aus OCR-Text sind meist kein
+    /// Termin — ein plausibler Terminvorschlag nennt zusätzlich einen Tag
+    /// (Datum oder Wörter wie „morgen", die der Detector mit erfasst).
+    private func isPlausibleDateMatch(_ originalText: String) -> Bool {
+        let timeOnlyPattern = #"^\d{1,2}([:.]\d{2})?\s*(Uhr)?$"#
+        return originalText.trimmed.range(
+            of: timeOnlyPattern,
+            options: [.regularExpression, .caseInsensitive]
+        ) == nil
     }
 
     private func addressString(from match: NSTextCheckingResult, originalText: String) -> String? {
@@ -108,6 +139,10 @@ final class DataDetectionService {
                 .trimmingCharacters(in: CharacterSet(charactersIn: ".,;:"))
 
             guard !value.contains("@") || value.lowercased().hasPrefix("mailto:") else {
+                continue
+            }
+
+            guard isPlausibleLink(value) else {
                 continue
             }
 
