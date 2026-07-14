@@ -25,14 +25,25 @@ final class CaptureViewModel: ObservableObject {
     private let ocrService = OCRService.shared
     private let dataDetectionService = DataDetectionService.shared
     private var cancellables: Set<AnyCancellable> = []
+    // Text, der beim Start der Aufnahme schon da war — das Transkript wird
+    // angehängt statt ihn zu ersetzen (Partial Results überschreiben nur den Anhang).
+    private var textBeforeRecording = ""
 
     init() {
         speechService.$transcript
             .receive(on: RunLoop.main)
             .sink { [weak self] transcript in
                 guard let self, !transcript.trimmed.isEmpty else { return }
-                self.inputText = transcript
-                self.sourceType = .voice
+
+                let baseText = self.textBeforeRecording.trimmed
+                self.inputText = baseText.isEmpty ? transcript : baseText + "\n" + transcript
+
+                if !self.imageAttachments.isEmpty {
+                    self.sourceType = .mixed
+                } else {
+                    self.sourceType = baseText.isEmpty ? .voice : .mixed
+                }
+
                 self.recalculateDetectedInfo()
             }
             .store(in: &cancellables)
@@ -185,6 +196,7 @@ final class CaptureViewModel: ObservableObject {
 
         hasAttemptedSpeechInput = true
         isPreparingSpeech = true
+        textBeforeRecording = inputText
         await speechService.startRecording()
         isPreparingSpeech = false
     }
