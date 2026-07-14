@@ -66,11 +66,14 @@ struct MemoPingTodayReminderWidgetView: View {
             HStack {
                 Label("Heute", systemImage: "bell")
                     .font(.headline)
+                    .lineLimit(1)
+                    .layoutPriority(1)
                 Spacer()
                 if !entry.snapshot.reminders.isEmpty {
                     Text("\(entry.snapshot.reminders.count) offen")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
 
