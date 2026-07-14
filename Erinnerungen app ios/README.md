@@ -9,7 +9,7 @@ RemindlyAi ist eine private iOS-App zum schnellen Erfassen von Notizen, Erinneru
 - Keine Firebase- oder KI-API
 - SwiftData speichert Memo-Daten in der aktuellen unsigned IPA lokal auf dem Geraet
 - Bilder werden als Dateien lokal in `Application Support/MemoPingImages` gespeichert und in dieser Version nicht zwischen Geraeten synchronisiert
-- Spracherkennung wird mit `requiresOnDeviceRecognition = true` auf lokale Erkennung begrenzt
+- Spracherkennung laeuft mit `requiresOnDeviceRecognition` lokal auf dem Geraet, sofern iOS On-Device-Erkennung fuer Deutsch unterstuetzt
 
 ## Projekt starten
 
