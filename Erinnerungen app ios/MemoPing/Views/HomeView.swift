@@ -4,6 +4,7 @@ import SwiftUI
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \MemoItem.createdAt, order: .reverse) private var items: [MemoItem]
+    @Query(sort: \MemoCategoryItem.sortOrder) private var categories: [MemoCategoryItem]
 
     @StateObject private var viewModel = HomeViewModel()
     @State private var isCapturePresented = false
@@ -31,6 +32,24 @@ struct HomeView: View {
         .sheet(isPresented: $isCapturePresented) {
             CaptureView { isCapturePresented = false }
         }
+        .task {
+            do {
+                try MemoCategoryItem.seedDefaultsIfNeeded(in: modelContext)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+
+            // Widget-Snapshot beim App-Start aktuell halten
+            MemoWidgetSnapshotUpdater.refresh(in: modelContext)
+
+            // Benachrichtigungen entfernen, die zu gelöschten oder erledigten Memos gehören
+            let validIdentifiers = Set(
+                items
+                    .filter { $0.hasReminder && !$0.isCompleted }
+                    .map { $0.id.uuidString }
+            )
+            await NotificationService.shared.removeOrphanedNotifications(validIdentifiers: validIdentifiers)
+        }
         .alert("Hinweis", isPresented: errorBinding) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
@@ -55,7 +74,7 @@ struct HomeView: View {
 
     @ViewBuilder
     private var content: some View {
-        let groups = viewModel.sectionGroups(from: items)
+        let groups = viewModel.sectionGroups(from: items, categories: categories)
 
         if items.isEmpty {
             emptyState(
@@ -89,7 +108,10 @@ struct HomeView: View {
                                 NavigationLink {
                                     DetailView(item: item)
                                 } label: {
-                                    MemoCardView(item: item)
+                                    MemoCardView(
+                                        item: item,
+                                        category: MemoCategoryItem.item(for: item.categoryRawValue, in: categories)
+                                    )
                                 }
                                 .buttonStyle(.plain)
                                 .padding(.horizontal, 16)
@@ -120,7 +142,7 @@ struct HomeView: View {
                 }
                 .padding(.top, 8)
                 .animation(.snappy(duration: 0.2), value: viewModel.searchText)
-                .animation(.snappy(duration: 0.2), value: viewModel.selectedCategory)
+                .animation(.snappy(duration: 0.2), value: viewModel.selectedCategoryRawValue)
             }
         }
     }
@@ -197,18 +219,18 @@ struct HomeView: View {
     private var categoryFilterChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                filterChip(label: "Alle", systemImage: "tray.2", isActive: viewModel.selectedCategory == nil) {
-                    viewModel.selectedCategory = nil
+                filterChip(label: "Alle", systemImage: "tray.2", isActive: viewModel.selectedCategoryRawValue == nil) {
+                    viewModel.selectedCategoryRawValue = nil
                 }
 
-                ForEach(MemoCategory.allCases) { category in
+                ForEach(categories, id: \.id) { category in
                     filterChip(
                         label: category.displayName,
                         systemImage: category.systemImage,
-                        isActive: viewModel.selectedCategory == category,
+                        isActive: viewModel.selectedCategoryRawValue == category.id,
                         tint: category.tint
                     ) {
-                        viewModel.selectedCategory = (viewModel.selectedCategory == category) ? nil : category
+                        viewModel.selectedCategoryRawValue = (viewModel.selectedCategoryRawValue == category.id) ? nil : category.id
                     }
                 }
             }
@@ -277,26 +299,26 @@ struct HomeView: View {
     private var categoryFilterMenu: some View {
         Menu {
             Button {
-                viewModel.selectedCategory = nil
+                viewModel.selectedCategoryRawValue = nil
             } label: {
                 Label(
                     "Alle Kategorien",
-                    systemImage: viewModel.selectedCategory == nil ? "checkmark" : "tray.2"
+                    systemImage: viewModel.selectedCategoryRawValue == nil ? "checkmark" : "tray.2"
                 )
             }
             Divider()
-            ForEach(MemoCategory.allCases) { category in
+            ForEach(categories, id: \.id) { category in
                 Button {
-                    viewModel.selectedCategory = category
+                    viewModel.selectedCategoryRawValue = category.id
                 } label: {
                     Label(
                         category.displayName,
-                        systemImage: viewModel.selectedCategory == category ? "checkmark" : category.systemImage
+                        systemImage: viewModel.selectedCategoryRawValue == category.id ? "checkmark" : category.systemImage
                     )
                 }
             }
         } label: {
-            Image(systemName: viewModel.selectedCategory == nil
+            Image(systemName: viewModel.selectedCategoryRawValue == nil
                   ? "line.3.horizontal.decrease.circle"
                   : "line.3.horizontal.decrease.circle.fill")
         }
@@ -321,10 +343,19 @@ struct HomeView: View {
             do {
                 if item.isCompleted {
                     NotificationService.shared.cancelReminder(for: item)
+
+                    // Auch den synchronisierten Kalendertermin beenden,
+                    // sonst laufen dessen Alarme und Wiederholungen endlos weiter.
+                    if let eventIdentifier = item.calendarEventIdentifier {
+                        try? await CalendarSyncService.shared.deleteEvent(with: eventIdentifier)
+                        item.calendarEventIdentifier = nil
+                        item.syncsToCalendar = false
+                    }
                 } else if item.hasReminder {
                     try await NotificationService.shared.scheduleReminder(for: item)
                 }
                 try modelContext.save()
+                MemoWidgetSnapshotUpdater.refresh(in: modelContext)
             } catch {
                 item.isCompleted = previous
                 item.updatedAt = Date()
@@ -336,10 +367,16 @@ struct HomeView: View {
     private func delete(_ item: MemoItem) {
         Task { @MainActor in
             NotificationService.shared.cancelReminder(for: item)
+
+            if let eventIdentifier = item.calendarEventIdentifier {
+                try? await CalendarSyncService.shared.deleteEvent(with: eventIdentifier)
+            }
+
             imageStorage.deleteImages(fileNames: item.imageFileNames)
             modelContext.delete(item)
             do {
                 try modelContext.save()
+                MemoWidgetSnapshotUpdater.refresh(in: modelContext)
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -349,5 +386,5 @@ struct HomeView: View {
 
 #Preview {
     HomeView()
-        .modelContainer(for: MemoItem.self, inMemory: true)
+        .modelContainer(for: [MemoItem.self, MemoCategoryItem.self], inMemory: true)
 }

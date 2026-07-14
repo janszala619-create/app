@@ -2,6 +2,7 @@ import Combine
 import Foundation
 
 enum MemoListSection: String, CaseIterable, Identifiable {
+    case overdue
     case today
     case upcoming
     case noReminder
@@ -11,6 +12,8 @@ enum MemoListSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .overdue:
+            return "Überfällig"
         case .today:
             return "Heute"
         case .upcoming:
@@ -35,40 +38,31 @@ final class HomeViewModel: ObservableObject {
     @Published var searchText = ""
     @Published var selectedCategoryRawValue: String?
 
-    /// Compatibility bridge for views that still use the legacy enum-based category API.
-    /// New code should prefer `selectedCategoryRawValue` so custom categories also work.
-    var selectedCategory: MemoCategory? {
-        get {
-            guard let selectedCategoryRawValue else { return nil }
-            return MemoCategory(rawValue: selectedCategoryRawValue)
-        }
-        set {
-            selectedCategoryRawValue = newValue?.rawValue
-        }
-    }
-
-    /// Compatibility overload for the current HomeView. It preserves the legacy default
-    /// categories while the view is migrated to query `MemoCategoryItem` directly.
-    func sectionGroups(from items: [MemoItem]) -> [MemoSectionGroup] {
-        sectionGroups(from: items, categories: Self.legacyCategories)
-    }
-
     func sectionGroups(from items: [MemoItem], categories: [MemoCategoryItem]) -> [MemoSectionGroup] {
         let filteredItems = filtered(items, categories: categories)
         let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
 
-        let today = filteredItems.filter { item in
-            guard !item.isCompleted, item.hasReminder, let reminderDate = item.reminderDate else {
-                return false
-            }
+        let reminderItems = filteredItems.filter { item in
+            !item.isCompleted && item.hasReminder && item.reminderDate != nil
+        }
+
+        // Einmalige Erinnerungen mit vergangenem Termin sind überfällig —
+        // wiederholende laufen planmäßig weiter und zählen nicht als überfällig.
+        let overdue = reminderItems.filter { item in
+            guard let reminderDate = item.reminderDate else { return false }
+            return reminderDate < startOfToday && !item.reminderRepeatRule.isRepeating
+        }
+
+        let today = reminderItems.filter { item in
+            guard let reminderDate = item.reminderDate else { return false }
             return calendar.isDateInToday(reminderDate)
         }
 
-        let upcoming = filteredItems.filter { item in
-            guard !item.isCompleted, item.hasReminder, let reminderDate = item.reminderDate else {
-                return false
-            }
-            return !calendar.isDateInToday(reminderDate)
+        let upcoming = reminderItems.filter { item in
+            guard let reminderDate = item.reminderDate else { return false }
+            guard !calendar.isDateInToday(reminderDate) else { return false }
+            return reminderDate >= startOfToday || item.reminderRepeatRule.isRepeating
         }
 
         let noReminder = filteredItems.filter { item in
@@ -78,6 +72,7 @@ final class HomeViewModel: ObservableObject {
         let completed = filteredItems.filter(\.isCompleted)
 
         return [
+            MemoSectionGroup(section: .overdue, items: sorted(overdue)),
             MemoSectionGroup(section: .today, items: sorted(today)),
             MemoSectionGroup(section: .upcoming, items: sorted(upcoming)),
             MemoSectionGroup(section: .noReminder, items: sorted(noReminder)),
@@ -127,36 +122,6 @@ final class HomeViewModel: ObservableObject {
             case (.none, .none):
                 return lhs.createdAt > rhs.createdAt
             }
-        }
-    }
-
-    private static var legacyCategories: [MemoCategoryItem] {
-        MemoCategory.allCases.enumerated().map { index, category in
-            MemoCategoryItem(
-                id: category.rawValue,
-                name: category.displayName,
-                systemImage: category.systemImage,
-                tintRawValue: category.legacyTintRawValue,
-                isDefault: true,
-                sortOrder: index
-            )
-        }
-    }
-}
-
-private extension MemoCategory {
-    var legacyTintRawValue: String {
-        switch self {
-        case .uni:
-            return "indigo"
-        case .privat:
-            return "green"
-        case .wichtig:
-            return "orange"
-        case .dokumente:
-            return "teal"
-        case .ideen:
-            return "yellow"
         }
     }
 }

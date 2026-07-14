@@ -15,6 +15,8 @@ struct DetailView: View {
 
     @Bindable var item: MemoItem
 
+    @Query(sort: \MemoCategoryItem.sortOrder) private var categories: [MemoCategoryItem]
+
     @State private var isEditing = false
     @State private var errorMessage: String?
     @State private var selectedImage: DetailImage?
@@ -146,14 +148,14 @@ struct DetailView: View {
         detailCard {
             if isEditing {
                 VStack(spacing: 12) {
-                    CategoryPickerView(selection: categoryBinding)
+                    CategoryPickerView(selectionRawValue: categoryRawValueBinding, categories: categories)
                     Divider()
                     PriorityPickerView(selection: priorityBinding)
                 }
             } else {
                 HStack(spacing: 12) {
                     // Kategorie
-                    if let category = item.category {
+                    if let category = MemoCategoryItem.item(for: item.categoryRawValue, in: categories) {
                         metaChip(
                             label: category.displayName,
                             systemImage: category.systemImage,
@@ -559,6 +561,7 @@ struct DetailView: View {
                                 try await NotificationService.shared.scheduleReminder(for: item)
                             }
                             try modelContext.save()
+                            MemoWidgetSnapshotUpdater.refresh(in: modelContext)
                         } catch {
                             errorMessage = error.localizedDescription
                         }
@@ -626,10 +629,10 @@ struct DetailView: View {
 
     // MARK: - Bindings
 
-    private var categoryBinding: Binding<MemoCategory?> {
+    private var categoryRawValueBinding: Binding<String?> {
         Binding(
-            get: { item.category },
-            set: { item.category = $0; item.updatedAt = Date() }
+            get: { item.categoryRawValue },
+            set: { item.categoryRawValue = $0; item.updatedAt = Date() }
         )
     }
 
@@ -689,10 +692,12 @@ struct DetailView: View {
             do {
                 if item.isCompleted || !item.hasReminder {
                     NotificationService.shared.cancelReminder(for: item)
+                    await removeCalendarEvent()
                 } else {
                     try await NotificationService.shared.scheduleReminder(for: item)
                 }
                 try modelContext.save()
+                MemoWidgetSnapshotUpdater.refresh(in: modelContext)
                 isEditing = false
             } catch {
                 errorMessage = error.localizedDescription
@@ -705,37 +710,67 @@ struct DetailView: View {
         item.reminderDate = nil
         item.updatedAt = Date()
         NotificationService.shared.cancelReminder(for: item)
-        do { try modelContext.save() }
-        catch { errorMessage = error.localizedDescription }
+
+        Task { @MainActor in
+            await removeCalendarEvent()
+            do {
+                try modelContext.save()
+                MemoWidgetSnapshotUpdater.refresh(in: modelContext)
+            }
+            catch { errorMessage = error.localizedDescription }
+        }
     }
 
     private func markCompleted() {
         item.isCompleted = true
         item.updatedAt = Date()
         NotificationService.shared.cancelReminder(for: item)
-        do { try modelContext.save() }
-        catch { errorMessage = error.localizedDescription }
+
+        Task { @MainActor in
+            await removeCalendarEvent()
+            do {
+                try modelContext.save()
+                MemoWidgetSnapshotUpdater.refresh(in: modelContext)
+            }
+            catch { errorMessage = error.localizedDescription }
+        }
     }
 
     private func handleCompletionNotification() {
         Task { @MainActor in
             if item.isCompleted {
                 NotificationService.shared.cancelReminder(for: item)
+                await removeCalendarEvent()
             } else if item.hasReminder {
                 do { try await NotificationService.shared.scheduleReminder(for: item) }
                 catch { errorMessage = error.localizedDescription }
             }
+            MemoWidgetSnapshotUpdater.refresh(in: modelContext)
         }
     }
 
     private func deleteMemo() {
         Task { @MainActor in
             NotificationService.shared.cancelReminder(for: item)
+            await removeCalendarEvent()
             imageStorage.deleteImages(fileNames: item.imageFileNames)
             modelContext.delete(item)
-            do { try modelContext.save(); dismiss() }
+            do {
+                try modelContext.save()
+                MemoWidgetSnapshotUpdater.refresh(in: modelContext)
+                dismiss()
+            }
             catch { errorMessage = error.localizedDescription }
         }
+    }
+
+    /// Löscht den synchronisierten Kalendertermin, damit dessen Alarme und
+    /// Wiederholungen nicht weiterlaufen, wenn die Erinnerung beendet wurde.
+    private func removeCalendarEvent() async {
+        guard let eventIdentifier = item.calendarEventIdentifier else { return }
+        try? await CalendarSyncService.shared.deleteEvent(with: eventIdentifier)
+        item.calendarEventIdentifier = nil
+        item.syncsToCalendar = false
     }
 
     private func openPhone(_ phoneNumber: String) {

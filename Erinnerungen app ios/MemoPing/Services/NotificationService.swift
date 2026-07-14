@@ -92,6 +92,34 @@ final class NotificationService {
         removeNotifications(for: id)
     }
 
+    /// Entfernt geplante Benachrichtigungen, die zu keinem aktiven Memo mehr gehören —
+    /// z. B. von gelöschten oder erledigten Memos. `validIdentifiers` sind die UUID-Strings
+    /// aller Memos, deren Erinnerungen weiterlaufen dürfen.
+    func removeOrphanedNotifications(validIdentifiers: Set<String>) async {
+        let pendingRequests = await center.pendingNotificationRequests()
+
+        let orphanedIdentifiers = pendingRequests
+            .map(\.identifier)
+            .filter { identifier in
+                guard !identifier.hasPrefix("debug-") else {
+                    return false
+                }
+
+                let baseIdentifier = identifier.hasSuffix("-lead")
+                    ? String(identifier.dropLast("-lead".count))
+                    : identifier
+
+                return !validIdentifiers.contains(baseIdentifier)
+            }
+
+        guard !orphanedIdentifiers.isEmpty else {
+            return
+        }
+
+        center.removePendingNotificationRequests(withIdentifiers: orphanedIdentifiers)
+        center.removeDeliveredNotifications(withIdentifiers: orphanedIdentifiers)
+    }
+
     #if DEBUG
     func scheduleDebugReminder() async throws {
         guard try await ensureAuthorization() else {

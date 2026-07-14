@@ -25,13 +25,36 @@ struct MemoPingTodayReminderProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (MemoPingTodayReminderEntry) -> Void) {
-        completion(MemoPingTodayReminderEntry(date: Date(), snapshot: MemoWidgetSnapshotStore.load()))
+        completion(makeEntry())
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<MemoPingTodayReminderEntry>) -> Void) {
-        let entry = MemoPingTodayReminderEntry(date: Date(), snapshot: MemoWidgetSnapshotStore.load())
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
+        let entry = makeEntry()
+        let now = Date()
+        let calendar = Calendar.current
+
+        // Spätestens um Mitternacht aktualisieren, damit gestrige Erinnerungen verschwinden.
+        let in15Minutes = now.addingTimeInterval(15 * 60)
+        let startOfTomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? in15Minutes
+        let nextUpdate = min(in15Minutes, startOfTomorrow)
+
         completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
+    }
+
+    /// Filtert den gespeicherten Snapshot beim Rendern erneut auf "heute und offen",
+    /// damit ein veralteter Snapshot keine gestrigen Erinnerungen anzeigt.
+    private func makeEntry() -> MemoPingTodayReminderEntry {
+        let snapshot = MemoWidgetSnapshotStore.load()
+        let calendar = Calendar.current
+
+        let todaysReminders = snapshot.reminders.filter { reminder in
+            !reminder.isCompleted && calendar.isDateInToday(reminder.dueDate)
+        }
+
+        return MemoPingTodayReminderEntry(
+            date: Date(),
+            snapshot: MemoWidgetSnapshot(generatedAt: snapshot.generatedAt, reminders: todaysReminders)
+        )
     }
 }
 
@@ -44,9 +67,11 @@ struct MemoPingTodayReminderWidgetView: View {
                 Label("Heute", systemImage: "bell")
                     .font(.headline)
                 Spacer()
-                Text(entry.snapshot.generatedAt.formatted(date: .omitted, time: .shortened))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                if !entry.snapshot.reminders.isEmpty {
+                    Text("\(entry.snapshot.reminders.count) offen")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if entry.snapshot.reminders.isEmpty {

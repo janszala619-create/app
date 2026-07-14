@@ -167,11 +167,12 @@ enum MemoIntentDataProvider {
     @MainActor
     private static func activeReminderItems() -> [MemoItem] {
         let context = ModelContext(MemoDataStore.shared.container)
-        let descriptor = FetchDescriptor<MemoItem>()
+        let descriptor = FetchDescriptor<MemoItem>(
+            predicate: #Predicate<MemoItem> { $0.hasReminder && !$0.isCompleted && $0.reminderDate != nil }
+        )
 
         do {
             return try context.fetch(descriptor)
-                .filter { $0.hasReminder && !$0.isCompleted && $0.reminderDate != nil }
         } catch {
             return []
         }

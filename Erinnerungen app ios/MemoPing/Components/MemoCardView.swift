@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MemoCardView: View {
     let item: MemoItem
+    var category: MemoCategoryItem?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -111,7 +112,7 @@ struct MemoCardView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 // Kategorie
-                if let category = item.category {
+                if let category {
                     memoBadge(category.displayName, systemImage: category.systemImage, tint: category.tint)
                 }
 

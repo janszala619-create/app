@@ -9,17 +9,6 @@ struct CategoryPickerView: View {
         self.categories = categories
     }
 
-    /// Compatibility initializer for DetailView's legacy enum-based binding.
-    init(selection: Binding<MemoCategory?>) {
-        _selectionRawValue = Binding(
-            get: { selection.wrappedValue?.rawValue },
-            set: { rawValue in
-                selection.wrappedValue = rawValue.flatMap(MemoCategory.init(rawValue:))
-            }
-        )
-        categories = Self.legacyCategories
-    }
-
     var body: some View {
         let selectedCategory = MemoCategoryItem.item(for: selectionRawValue, in: categories)
 
@@ -47,41 +36,11 @@ struct CategoryPickerView: View {
             return $0.sortOrder < $1.sortOrder
         }
     }
-
-    private static var legacyCategories: [MemoCategoryItem] {
-        MemoCategory.allCases.enumerated().map { index, category in
-            MemoCategoryItem(
-                id: category.rawValue,
-                name: category.displayName,
-                systemImage: category.systemImage,
-                tintRawValue: category.compatibilityTintRawValue,
-                isDefault: true,
-                sortOrder: index
-            )
-        }
-    }
 }
 
 /// Enables `.foregroundStyle(.accentColor)` in generic ShapeStyle contexts.
 extension ShapeStyle where Self == Color {
     static var accentColor: Color { Color.accentColor }
-}
-
-private extension MemoCategory {
-    var compatibilityTintRawValue: String {
-        switch self {
-        case .uni:
-            return "indigo"
-        case .privat:
-            return "green"
-        case .wichtig:
-            return "orange"
-        case .dokumente:
-            return "teal"
-        case .ideen:
-            return "yellow"
-        }
-    }
 }
 
 #Preview {

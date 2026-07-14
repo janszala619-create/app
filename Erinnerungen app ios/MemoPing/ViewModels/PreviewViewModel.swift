@@ -350,6 +350,7 @@ final class PreviewViewModel: ObservableObject {
                 try modelContext.save()
             }
 
+            MemoWidgetSnapshotUpdater.refresh(in: modelContext)
             didPersistImages = true
         } catch {
             if let createdCalendarEventIdentifier {

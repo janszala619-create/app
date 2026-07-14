@@ -148,19 +148,19 @@ struct CaptureView: View {
                 .foregroundStyle(.primary)
 
             // Vorschau bereits hinzugefügter Bilder
-            if !viewModel.images.isEmpty {
+            if !viewModel.imageAttachments.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
-                        ForEach(Array(viewModel.images.enumerated()), id: \.offset) { index, image in
+                        ForEach(Array(viewModel.imageAttachments.enumerated()), id: \.element.id) { index, attachment in
                             ZStack(alignment: .topTrailing) {
-                                Image(uiImage: image)
+                                Image(uiImage: attachment.image)
                                     .resizable()
                                     .scaledToFill()
                                     .frame(width: 90, height: 90)
                                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                                 Button {
-                                    viewModel.images.remove(at: index)
+                                    viewModel.removeImage(attachment)
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.title3)
@@ -189,12 +189,12 @@ struct CaptureView: View {
                         .padding(.vertical, 12)
                 }
                 .buttonStyle(.bordered)
-                .disabled(viewModel.images.count >= 3)
+                .disabled(!viewModel.canAddMoreImages)
 
                 // Galerie
                 PhotosPicker(
                     selection: $selectedPhotoItems,
-                    maxSelectionCount: max(0, 3 - viewModel.images.count),
+                    maxSelectionCount: viewModel.remainingImageSlots,
                     matching: .images
                 ) {
                     Label("Aus Galerie", systemImage: "photo")
@@ -203,7 +203,7 @@ struct CaptureView: View {
                         .padding(.vertical, 12)
                 }
                 .buttonStyle(.bordered)
-                .disabled(viewModel.images.count >= 3)
+                .disabled(!viewModel.canAddMoreImages)
             }
 
             // Statuszeile
@@ -215,7 +215,7 @@ struct CaptureView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-            } else if viewModel.images.count >= 3 {
+            } else if !viewModel.canAddMoreImages {
                 Label("Maximal 3 Bilder pro Memo", systemImage: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -321,7 +321,7 @@ struct CaptureView: View {
     }
 
     private func openCamera() async {
-        guard viewModel.images.count < 3 else {
+        guard viewModel.canAddMoreImages else {
             viewModel.errorMessage = "Du kannst maximal 3 Bilder pro Memo hinzufügen."
             return
         }
@@ -349,7 +349,7 @@ struct CaptureView: View {
     private func loadSelectedPhotos(_ items: [PhotosPickerItem]) async {
         guard !items.isEmpty else { return }
 
-        let slotsLeft = 3 - viewModel.images.count
+        let slotsLeft = viewModel.remainingImageSlots
         guard slotsLeft > 0 else {
             viewModel.errorMessage = "Du kannst maximal 3 Bilder pro Memo hinzufügen."
             selectedPhotoItems = []
