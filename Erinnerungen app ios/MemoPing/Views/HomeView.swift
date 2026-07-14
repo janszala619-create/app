@@ -50,6 +50,15 @@ struct HomeView: View {
                     .map { $0.id.uuidString }
             )
             await NotificationService.shared.removeOrphanedNotifications(validIdentifiers: validIdentifiers)
+
+            // Bilddateien ohne Memo-Referenz aufräumen — z. B. Reste aus einem
+            // Erfassen-Flow, der vor dem Speichern beendet wurde. Die 24-h-
+            // Schonfrist in deleteOrphanedImages schützt laufende Entwürfe.
+            let referencedImageNames = Set(items.flatMap(\.imageFileNames))
+            let storage = imageStorage
+            Task.detached(priority: .utility) {
+                storage.deleteOrphanedImages(referencedFileNames: referencedImageNames)
+            }
         }
         .alert("Hinweis", isPresented: errorBinding) {
             Button("OK", role: .cancel) { errorMessage = nil }

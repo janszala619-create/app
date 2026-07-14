@@ -85,6 +85,35 @@ final class ImageStorageService {
         fileNames.forEach(deleteImage(fileName:))
     }
 
+    /// Entfernt Bilddateien, die kein Memo mehr referenziert — z. B. Reste aus
+    /// einem Vorschau-Schritt, in dem die App beendet wurde. Die Schonfrist
+    /// schützt Dateien eines gerade laufenden Erfassen-Flows.
+    func deleteOrphanedImages(referencedFileNames: Set<String>, minimumAge: TimeInterval = 24 * 60 * 60) {
+        guard let directory = try? imageDirectory() else {
+            return
+        }
+
+        let fileManager = FileManager.default
+        guard let fileURLs = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.creationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return
+        }
+
+        let cutoffDate = Date().addingTimeInterval(-minimumAge)
+
+        for fileURL in fileURLs where !referencedFileNames.contains(fileURL.lastPathComponent) {
+            let creationDate = (try? fileURL.resourceValues(forKeys: [.creationDateKey]))?.creationDate ?? .distantPast
+            guard creationDate < cutoffDate else {
+                continue
+            }
+
+            try? fileManager.removeItem(at: fileURL)
+        }
+    }
+
     private func imageDirectory() throws -> URL {
         guard let supportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             throw ImageStorageError.cannotLoadDirectory
